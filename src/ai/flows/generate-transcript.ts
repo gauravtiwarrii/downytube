@@ -35,7 +35,7 @@ const prompt = ai.definePrompt({
   name: 'generateTranscriptPrompt',
   input: {schema: GenerateTranscriptInputSchema},
   output: {schema: GenerateTranscriptOutputSchema},
-  model: 'googleai/gemini-1.5-pro-preview-0514', // Use a powerful model for this task
+  model: 'googleai/gemini-1.5-flash', // Use a powerful, stable model for this task
   prompt: `You are an expert audio transcription service. Your task is to transcribe the provided audio file and format the output as a structured JSON object.
 
 **CRITICAL INSTRUCTIONS:**
