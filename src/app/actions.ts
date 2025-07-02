@@ -115,6 +115,22 @@ export async function getDownloadUrl(url: string) {
   }
 }
 
+async function imageUrlToDataUri(url: string): Promise<string> {
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch image: ${response.statusText}`);
+        }
+        const blob = await response.arrayBuffer();
+        const contentType = response.headers.get('content-type') || 'image/jpeg';
+        const base64 = Buffer.from(blob).toString('base64');
+        return `data:${contentType};base64,${base64}`;
+    } catch (error) {
+        console.error("Error converting image URL to data URI:", error);
+        throw new Error("Could not process the thumbnail image.");
+    }
+}
+
 function dataUriToReadableStream(dataUri: string): Readable {
   const base64Data = dataUri.split(',')[1];
   const buffer = Buffer.from(base64Data, 'base64');
@@ -159,11 +175,16 @@ export async function uploadToYouTube(video: Video) {
     }
 
     // 3. Upload thumbnail
-    const thumbnailStream = dataUriToReadableStream(video.thumbnailUrl);
+    let thumbnailDataUri = video.thumbnailUrl;
+    if (!thumbnailDataUri.startsWith('data:')) {
+      thumbnailDataUri = await imageUrlToDataUri(thumbnailDataUri);
+    }
+    
+    const thumbnailStream = dataUriToReadableStream(thumbnailDataUri);
     await youtube.thumbnails.set({
       videoId: videoId,
       media: {
-        mimeType: video.thumbnailUrl.substring(video.thumbnailUrl.indexOf(':') + 1, video.thumbnailUrl.indexOf(';')),
+        mimeType: thumbnailDataUri.substring(thumbnailDataUri.indexOf(':') + 1, thumbnailDataUri.indexOf(';')),
         body: thumbnailStream,
       },
     });
