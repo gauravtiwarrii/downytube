@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { checkAuthStatus } from '@/app/actions';
-import { LogIn, CheckCircle } from 'lucide-react';
+import { LogIn, LogOut } from 'lucide-react';
 
 export default function AuthConnect() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -22,10 +22,12 @@ export default function AuthConnect() {
 
   if (isAuthenticated) {
     return (
-      <Button variant="outline" size="sm" disabled>
-        <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
-        Connected
-      </Button>
+      <a href="/api/auth/google/logout">
+        <Button variant="outline" size="sm">
+          <LogOut className="mr-2 h-4 w-4" />
+          Disconnect
+        </Button>
+      </a>
     );
   }
 
