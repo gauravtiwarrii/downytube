@@ -23,10 +23,15 @@ export async function getVideoMetadata(url: string) {
     const info = await ytdl.getInfo(url);
     const videoDetails = info.videoDetails;
 
+    const description =
+      (typeof videoDetails.description === 'object' && videoDetails.description !== null
+        ? (videoDetails.description as any)?.simpleText
+        : videoDetails.description) || 'No description available.';
+
     const newVideo: Video = {
       id: videoDetails.videoId,
       title: videoDetails.title,
-      description: videoDetails.description || 'No description available.',
+      description: description,
       thumbnailUrl: `https://i.ytimg.com/vi/${videoDetails.videoId}/hqdefault.jpg`,
       youtubeUrl: videoDetails.video_url,
       tags: videoDetails.keywords || [],
