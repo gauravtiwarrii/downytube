@@ -32,13 +32,6 @@ const timeStringToSeconds = (time: string): number => {
 };
 
 const FormSchema = z.object({
-  url: z.string().url({ message: 'Please enter a valid URL.' }).refine(
-    (url) => {
-      const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/.+$/;
-      return youtubeRegex.test(url);
-    },
-    { message: 'Please enter a valid YouTube URL.' }
-  ),
   startTime: z.string().regex(/^\d{1,3}:\d{2}(:\d{2})?$/, { message: 'Use MM:SS or HH:MM:SS format.' }),
   endTime: z.string().regex(/^\d{1,3}:\d{2}(:\d{2})?$/, { message: 'Use MM:SS or HH:MM:SS format.' }),
   title: z.string().min(1, 'Title is required.').max(100, 'Title must be 100 characters or less.'),
@@ -49,16 +42,28 @@ const FormSchema = z.object({
 });
 
 type ClippingFormProps = {
+  youtubeUrl: string;
   onUploadSuccess: (url: string) => void;
+  onCancel: () => void;
+  prefillData?: {
+    startTime: string;
+    endTime: string;
+    title: string;
+  }
 };
 
-const ClippingForm = ({ onUploadSuccess }: ClippingFormProps) => {
+const ClippingForm = ({ youtubeUrl, onUploadSuccess, onCancel, prefillData }: ClippingFormProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
-    defaultValues: { url: '', startTime: '00:00', endTime: '00:30', title: '', description: '' },
+    defaultValues: {
+        startTime: prefillData?.startTime || '00:00',
+        endTime: prefillData?.endTime || '00:30',
+        title: prefillData?.title || '',
+        description: '',
+    },
   });
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
@@ -66,11 +71,10 @@ const ClippingForm = ({ onUploadSuccess }: ClippingFormProps) => {
     toast({
         title: 'Processing Clip...',
         description: 'This may take several minutes depending on the clip length. Please do not navigate away.',
-        duration: 300000,
     });
 
     const result = await generateAndUploadClip({
-        youtubeUrl: data.url,
+        youtubeUrl: youtubeUrl,
         startTime: data.startTime,
         endTime: data.endTime,
         title: data.title,
@@ -80,10 +84,6 @@ const ClippingForm = ({ onUploadSuccess }: ClippingFormProps) => {
     setIsLoading(false);
 
     if (result.success && result.data?.youtubeUrl) {
-      toast({
-        title: 'Upload Complete!',
-        description: 'Your clip has been successfully uploaded to YouTube.',
-      });
       onUploadSuccess(result.data.youtubeUrl);
     } else {
       toast({
@@ -98,25 +98,12 @@ const ClippingForm = ({ onUploadSuccess }: ClippingFormProps) => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Create a New Clip</CardTitle>
-        <CardDescription>Provide video details and the time range to clip.</CardDescription>
+        <CardTitle>{prefillData ? "Customize Your Clip" : "Create a Manual Clip"}</CardTitle>
+        <CardDescription>Adjust the details below and generate your clip.</CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <FormField
-              control={form.control}
-              name="url"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>YouTube URL</FormLabel>
-                  <FormControl>
-                    <Input placeholder="https://www.youtube.com/watch?v=..." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -171,19 +158,24 @@ const ClippingForm = ({ onUploadSuccess }: ClippingFormProps) => {
                   </FormItem>
                 )}
               />
-            <Button type="submit" disabled={isLoading} className="w-full">
-              {isLoading ? (
-                <>
-                  <Loader2 className="animate-spin" />
-                  Generating and Uploading...
-                </>
-              ) : (
-                <>
-                  <Scissors />
-                  Create and Upload Clip
-                </>
-              )}
-            </Button>
+            <div className="flex flex-col-reverse sm:flex-row gap-2">
+                 <Button variant="outline" type="button" onClick={onCancel} className="w-full">
+                    Cancel
+                </Button>
+                <Button type="submit" disabled={isLoading} className="w-full">
+                {isLoading ? (
+                    <>
+                    <Loader2 className="animate-spin" />
+                    Generating...
+                    </>
+                ) : (
+                    <>
+                    <Scissors />
+                    Create and Upload
+                    </>
+                )}
+                </Button>
+            </div>
           </form>
         </Form>
       </CardContent>

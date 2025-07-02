@@ -3,11 +3,13 @@
 import { optimizeYouTubeTags, OptimizeYouTubeTagsInput } from '@/ai/flows/optimize-youtube-tags';
 import { rewriteVideoDetails, RewriteVideoDetailsInput } from '@/ai/flows/rewrite-video-details';
 import { generateThumbnail, GenerateThumbnailInput } from '@/ai/flows/generate-thumbnail';
+import { findViralClips, FindViralClipsInput } from '@/ai/flows/find-viral-clips';
 import { getYouTubeClient, getTokensFromCookie } from '@/lib/youtube-auth';
 import ytdl from '@distube/ytdl-core';
 import type { Video } from '@/types';
 import { PassThrough, Readable } from 'stream';
 import ffmpeg from 'fluent-ffmpeg';
+import { YoutubeTranscript } from 'youtube-transcript';
 
 
 export async function checkAuthStatus() {
@@ -239,6 +241,74 @@ const timeStringToSeconds = (time: string): number => {
     }
     return NaN;
 };
+
+const formatTime = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    const pad = (num: number) => String(num).padStart(2, '0');
+    return `${pad(minutes)}:${pad(remainingSeconds)}`;
+};
+
+export async function analyzeVideoForClips(url: string) {
+    try {
+        if (!ytdl.validateURL(url)) {
+            return { success: false, error: 'Invalid YouTube URL provided.' };
+        }
+
+        const info = await ytdl.getInfo(url);
+        if (!info || !info.videoDetails) {
+            return { success: false, error: 'Could not retrieve video details.' };
+        }
+        const videoDetails = info.videoDetails;
+        const video: Video = {
+            id: videoDetails.videoId,
+            title: videoDetails.title || 'No title available',
+            description: videoDetails.description || 'No description available.',
+            thumbnailUrl: `https://i.ytimg.com/vi/${videoDetails.videoId}/hqdefault.jpg`,
+            youtubeUrl: videoDetails.video_url,
+            tags: videoDetails.keywords || [],
+            videoUrl: '#',
+        };
+
+        const transcript = await YoutubeTranscript.fetchTranscript(url);
+        if (!transcript || transcript.length === 0) {
+            return { success: false, error: 'Could not fetch a transcript for this video. It might be disabled or in an unsupported language.' };
+        }
+        
+        const aiInput: FindViralClipsInput = {
+            videoTitle: video.title,
+            transcript: transcript.map(t => ({...t, offset: t.offset, duration: t.duration})),
+        };
+        const suggestionsResult = await findViralClips(aiInput);
+        
+        if (!suggestionsResult || !suggestionsResult.clips) {
+             return { success: false, error: 'The AI could not find any clip suggestions.' };
+        }
+
+        return {
+            success: true,
+            data: {
+                video,
+                suggestions: suggestionsResult.clips.map(clip => ({
+                    ...clip,
+                    startTimeString: formatTime(clip.startTime),
+                    endTimeString: formatTime(clip.endTime),
+                })),
+            }
+        }
+    } catch (error) {
+        console.error('Error in analyzeVideoForClips:', error);
+        let errorMessage = 'An unknown error occurred during analysis.';
+        if (error instanceof Error) {
+            if (error.message.includes('Could not find a transcript for this video')) {
+                errorMessage = 'Could not fetch a transcript. It may be disabled or in a language other than English.';
+            } else {
+                errorMessage = error.message;
+            }
+        }
+        return { success: false, error: errorMessage };
+    }
+}
 
 
 export async function generateAndUploadClip(input: {
