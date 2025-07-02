@@ -51,21 +51,41 @@ const generateThumbnailFlow = ai.defineFlow(
   async (input) => {
     let prompt: any;
 
-    // If the thumbnail is a placeholder or already a data URI, generate a new one from scratch.
+    // If the thumbnail is a placeholder or already a data URI from our app, generate a new one from scratch.
     if (input.existingThumbnailUrl.startsWith('data:') || input.existingThumbnailUrl.includes('placehold.co')) {
-        prompt = `Generate a professional, high-resolution YouTube thumbnail for a video with the following details. The image should be eye-catching, high-contrast, and directly related to the video's content. Avoid using any text or logos. Focus on a single, compelling visual that sparks curiosity.
-      
-        Title: "${input.title}"
-        Description: "${input.description}"`;
+        prompt = `You are a professional graphic designer specializing in viral YouTube thumbnails. Your task is to create a thumbnail for a video with the title and description below.
+
+**Key principles for this thumbnail:**
+*   **Visually Arresting:** Use vibrant, saturated colors and strong contrast to grab attention immediately.
+*   **Cinematic Quality:** The image should look like a still from a high-quality film. Think dynamic lighting, interesting angles, and a sense of depth.
+*   **Single Focal Point:** The thumbnail must have one clear, compelling subject. Avoid clutter.
+*   **Emotionally Evocative:** The image should spark curiosity, excitement, or another strong emotion relevant to the video's topic.
+*   **Absolutely No Text:** Do not include any letters, words, or logos in the image. The visual alone should tell the story.
+
+**Video Details:**
+*   **Title:** "${input.title}"
+*   **Description:** "${input.description}"
+
+Create a high-resolution, 16:9 aspect ratio image that embodies these principles.`;
     } else {
         // If it's a real URL, fetch it and use it as context to improve upon.
         const existingThumbnailDataUri = await imageUrlToDataUri(input.existingThumbnailUrl);
         prompt = [
             {media: {url: existingThumbnailDataUri}},
-            {text: `Analyze the provided image and video details to generate a new, improved YouTube thumbnail. The new image should be similar in style and subject matter but have a more dynamic composition or a different focus. It should be vibrant, high-contrast, and compelling. Avoid adding any text or logos. The goal is to create a purely visual thumbnail that is more clickable than the original.
-            
-            Title: "${input.title}"
-            Description: "${input.description}"`},
+            {text: `You are a world-class photo editor and YouTube strategist. Your goal is to take the provided image and video details and create a dramatically improved version for a YouTube thumbnail.
+
+**Your improvements should focus on:**
+*   **Enhanced Dynamism:** Re-imagine the composition with more dramatic angles, a sense of motion, or a more compelling focus on the subject.
+*   **Cinematic Lighting:** Add professional, cinematic lighting. Increase contrast, deepen shadows, and add highlights to make the subject pop.
+*   **Vibrant Color Grading:** Apply a professional color grade to make the image more vibrant and eye-catching. The colors should be saturated but look realistic and high-quality.
+*   **Maintain the Core Subject:** The new image must be clearly based on the original, retaining the same subject and general theme.
+*   **Absolutely No Text:** Do not add any text, logos, or watermarks.
+
+**Video Details:**
+*   **Title:** "${input.title}"
+*   **Description:** "${input.description}"
+
+Generate a new, high-resolution image that is visually superior and more clickable than the original, following all the principles above.`},
         ];
     }
 
