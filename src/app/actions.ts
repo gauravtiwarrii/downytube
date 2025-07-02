@@ -1,7 +1,7 @@
 'use server';
 
 import { optimizeYouTubeTags, OptimizeYouTubeTagsInput } from '@/ai/flows/optimize-youtube-tags';
-import ytdl from 'ytdl-core';
+import ytdl from '@distube/ytdl-core';
 import type { Video } from '@/types';
 
 export async function getOptimizedTags(data: OptimizeYouTubeTagsInput) {
