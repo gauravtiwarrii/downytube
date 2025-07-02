@@ -175,6 +175,39 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
     setIsDownloading(false);
   };
 
+  const handleDownloadThumbnail = () => {
+    try {
+      const link = document.createElement('a');
+      link.href = video.thumbnailUrl;
+      const safeTitle = (video.rewrittenTitle || video.title).replace(/[^a-z0-9_\-.]/gi, '_');
+
+      let extension = 'jpg';
+      if (video.thumbnailUrl.startsWith('data:image/png')) {
+        extension = 'png';
+      } else if (video.thumbnailUrl.startsWith('data:image/jpeg')) {
+        extension = 'jpg';
+      } else if (video.thumbnailUrl.startsWith('data:image/webp')) {
+        extension = 'webp';
+      }
+
+      link.setAttribute('download', `${safeTitle}_thumbnail.${extension}`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      toast({
+        title: 'Download Started',
+        description: `Downloading thumbnail for "${video.rewrittenTitle || video.title}".`,
+      });
+    } catch (error) {
+      console.error("Failed to download thumbnail:", error);
+      toast({
+        variant: 'destructive',
+        title: 'Download Failed',
+        description: 'Could not trigger the thumbnail download in your browser.',
+      });
+    }
+  };
+
   const currentTitle = video.rewrittenTitle || video.title;
   const currentDescription = video.rewrittenDescription || video.description;
   const isAiBusy = isRewriting || isOptimizing || isGeneratingThumbnail;
@@ -254,25 +287,35 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
           </Accordion>
 
           <div className="rounded-lg border bg-card/50 p-4 space-y-4">
-            <div className="flex justify-between items-start">
+            <div className="flex justify-between items-start flex-wrap gap-4">
               <div>
-                <h4 className="font-semibold text-foreground">AI Thumbnail Generator</h4>
+                <h4 className="font-semibold text-foreground">Thumbnail</h4>
                 <p className="text-sm text-muted-foreground">
-                  Use AI to generate a new, similar thumbnail.
+                  Generate a new thumbnail or download the current one.
                 </p>
               </div>
-              <Button
-                size="sm"
-                onClick={handleGenerateThumbnail}
-                disabled={isAiBusy}
-              >
-                {isGeneratingThumbnail ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <ImageIcon className="mr-2 h-4 w-4" />
-                )}
-                Regenerate
-              </Button>
+              <div className="flex gap-2 flex-shrink-0">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleDownloadThumbnail}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Download
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleGenerateThumbnail}
+                  disabled={isAiBusy}
+                >
+                  {isGeneratingThumbnail ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <ImageIcon className="mr-2 h-4 w-4" />
+                  )}
+                  Regenerate
+                </Button>
+              </div>
             </div>
           </div>
 
