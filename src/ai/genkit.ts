@@ -1,4 +1,8 @@
-import 'dotenv/config';
+// Using explicit dotenv loading for robustness in all environments.
+import dotenv from 'dotenv';
+import path from 'path';
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+
 import {genkit} from 'genkit';
 import {googleAI} from '@genkit-ai/googleai';
 
