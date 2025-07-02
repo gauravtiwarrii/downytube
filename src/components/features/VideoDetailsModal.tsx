@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -17,9 +17,9 @@ import {
 } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Sparkles, Info, Download, Pencil, Copy, Image as ImageIcon, Upload, ExternalLink } from 'lucide-react';
+import { Loader2, Sparkles, Info, Download, Pencil, Copy, Image as ImageIcon, Upload, ExternalLink, LogIn } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getOptimizedTags, getDownloadUrl, getRewrittenDetails, getGeneratedThumbnail, uploadToYouTube } from '@/app/actions';
+import { getOptimizedTags, getDownloadUrl, getRewrittenDetails, getGeneratedThumbnail, uploadToYouTube, checkAuthStatus } from '@/app/actions';
 import type { Video } from '@/types';
 
 type VideoDetailsModalProps = {
@@ -34,7 +34,14 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (open) {
+      checkAuthStatus().then(setIsAuthenticated);
+    }
+  }, [open]);
 
   const handleCopy = (text: string | string[] | undefined, toastDescription: string) => {
     if (!text || (Array.isArray(text) && text.length === 0)) {
@@ -454,22 +461,33 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
               <div>
                 <h4 className="font-semibold text-primary-foreground">Upload to YouTube</h4>
                 <p className="text-sm text-muted-foreground">
-                  Automatically upload the video with all AI enhancements.
+                  {isAuthenticated
+                    ? 'Automatically upload the video with all AI enhancements.'
+                    : 'Connect your YouTube account to enable uploads.'}
                 </p>
               </div>
-              <Button
-                size="sm"
-                onClick={handleUploadToYouTube}
-                disabled={isAiBusy || isDownloading}
-                variant="default"
-              >
-                {isUploading ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Upload className="mr-2 h-4 w-4" />
-                )}
-                Upload
-              </Button>
+              {isAuthenticated ? (
+                <Button
+                  size="sm"
+                  onClick={handleUploadToYouTube}
+                  disabled={isAiBusy || isDownloading}
+                  variant="default"
+                >
+                  {isUploading ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Upload className="mr-2 h-4 w-4" />
+                  )}
+                  Upload
+                </Button>
+              ) : (
+                <a href="/api/auth/google/login">
+                  <Button size="sm" variant="default">
+                    <LogIn className="mr-2 h-4 w-4" />
+                    Connect to Upload
+                  </Button>
+                </a>
+              )}
             </div>
           </div>
 
