@@ -54,7 +54,17 @@ export default function ClippingPage() {
             setVideoInfo(result.data.video);
             setSuggestions(result.data.suggestions);
             setAnalysisState('success');
-            toast({ title: 'Analysis Complete!', description: 'AI has found some viral clip ideas for you.' });
+            if (result.data.transcriptError) {
+                toast({
+                    variant: 'destructive',
+                    title: 'AI Analysis Skipped',
+                    description: result.data.transcriptError,
+                    duration: 7000,
+                });
+                setShowManualForm(true); // Go straight to manual form
+            } else {
+                toast({ title: 'Analysis Complete!', description: 'AI has found some viral clip ideas for you.' });
+            }
         } else {
             setError(result.error || 'An unknown error occurred.');
             setAnalysisState('error');
@@ -187,9 +197,11 @@ export default function ClippingPage() {
                                         ))}
                                     </div>
                                 ) : (
-                                    <Card className="text-center p-8">
-                                        <h3 className="text-lg font-semibold">No Clips Found</h3>
-                                        <p className="mt-1 text-sm text-muted-foreground">The AI couldn't find any suitable clips in this video's transcript.</p>
+                                     <Card className="text-center p-8">
+                                        <h3 className="text-lg font-semibold">AI Analysis Skipped</h3>
+                                        <p className="mt-1 text-sm text-muted-foreground">
+                                            A transcript could not be found for this video. You can still create a clip manually.
+                                        </p>
                                     </Card>
                                 )}
                                 
@@ -236,7 +248,7 @@ export default function ClippingPage() {
                             </div>
                             {error && <p className="text-sm text-destructive mt-2">{error}</p>}
                              <div className="text-center mt-6">
-                                <Button variant="link" onClick={() => { setAnalysisState('success'); setShowManualForm(true); }}>
+                                <Button variant="link" onClick={() => { setAnalysisState('success'); setShowManualForm(true); setVideoInfo(null) }}>
                                     Or, skip analysis and clip manually
                                 </Button>
                              </div>

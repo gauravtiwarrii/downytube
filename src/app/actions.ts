@@ -250,64 +250,86 @@ const formatTime = (seconds: number): string => {
 };
 
 export async function analyzeVideoForClips(url: string) {
-    try {
-        if (!ytdl.validateURL(url)) {
-            return { success: false, error: 'Invalid YouTube URL provided.' };
-        }
-
-        const info = await ytdl.getInfo(url);
-        if (!info || !info.videoDetails) {
-            return { success: false, error: 'Could not retrieve video details.' };
-        }
-        const videoDetails = info.videoDetails;
-        const video: Video = {
-            id: videoDetails.videoId,
-            title: videoDetails.title || 'No title available',
-            description: videoDetails.description || 'No description available.',
-            thumbnailUrl: `https://i.ytimg.com/vi/${videoDetails.videoId}/hqdefault.jpg`,
-            youtubeUrl: videoDetails.video_url,
-            tags: videoDetails.keywords || [],
-            videoUrl: '#',
-        };
-
-        const transcript = await YoutubeTranscript.fetchTranscript(url);
-        if (!transcript || transcript.length === 0) {
-            return { success: false, error: 'Could not fetch a transcript for this video. It might be disabled or in an unsupported language.' };
-        }
-        
-        const aiInput: FindViralClipsInput = {
-            videoTitle: video.title,
-            transcript: transcript.map(t => ({...t, offset: t.offset, duration: t.duration})),
-        };
-        const suggestionsResult = await findViralClips(aiInput);
-        
-        if (!suggestionsResult || !suggestionsResult.clips) {
-             return { success: false, error: 'The AI could not find any clip suggestions.' };
-        }
-
-        return {
-            success: true,
-            data: {
-                video,
-                suggestions: suggestionsResult.clips.map(clip => ({
-                    ...clip,
-                    startTimeString: formatTime(clip.startTime),
-                    endTimeString: formatTime(clip.endTime),
-                })),
-            }
-        }
-    } catch (error) {
-        console.error('Error in analyzeVideoForClips:', error);
-        let errorMessage = 'An unknown error occurred during analysis.';
-        if (error instanceof Error) {
-            if (error.message.includes('Could not find a transcript for this video')) {
-                errorMessage = 'Could not fetch a transcript. It may be disabled or in a language other than English.';
-            } else {
-                errorMessage = error.message;
-            }
-        }
-        return { success: false, error: errorMessage };
+  let video: Video;
+  try {
+    if (!ytdl.validateURL(url)) {
+      return { success: false, error: 'Invalid YouTube URL provided.' };
     }
+
+    const info = await ytdl.getInfo(url);
+    if (!info || !info.videoDetails) {
+      return { success: false, error: 'Could not retrieve video details.' };
+    }
+    const videoDetails = info.videoDetails;
+    video = {
+      id: videoDetails.videoId,
+      title: videoDetails.title || 'No title available',
+      description: videoDetails.description || 'No description available.',
+      thumbnailUrl: `https://i.ytimg.com/vi/${videoDetails.videoId}/hqdefault.jpg`,
+      youtubeUrl: videoDetails.video_url,
+      tags: videoDetails.keywords || [],
+      videoUrl: '#',
+    };
+  } catch (e) {
+    console.error('Error fetching video info in analyzeVideoForClips:', e);
+    const errorMessage =
+      e instanceof Error
+        ? e.message
+        : 'An unknown error occurred during video analysis.';
+    return { success: false, error: errorMessage };
+  }
+
+  try {
+    const transcript = await YoutubeTranscript.fetchTranscript(url);
+    if (!transcript || transcript.length === 0) {
+      throw new Error('Transcript not found or is empty');
+    }
+
+    const aiInput: FindViralClipsInput = {
+      videoTitle: video.title,
+      transcript: transcript.map((t) => ({
+        ...t,
+        offset: t.offset,
+        duration: t.duration,
+      })),
+    };
+    const suggestionsResult = await findViralClips(aiInput);
+
+    if (!suggestionsResult || !suggestionsResult.clips) {
+      return {
+        success: false,
+        error: 'The AI could not find any clip suggestions.',
+      };
+    }
+
+    return {
+      success: true,
+      data: {
+        video,
+        suggestions: suggestionsResult.clips.map((clip) => ({
+          ...clip,
+          startTimeString: formatTime(clip.startTime),
+          endTimeString: formatTime(clip.endTime),
+        })),
+        transcriptError: null,
+      },
+    };
+  } catch (e) {
+    console.error(
+      'Error fetching transcript or running AI in analyzeVideoForClips:',
+      e
+    );
+    const transcriptError =
+      'Could not fetch a transcript for this video. It might be disabled or in an unsupported language.';
+    return {
+      success: true,
+      data: {
+        video,
+        suggestions: [],
+        transcriptError,
+      },
+    };
+  }
 }
 
 
