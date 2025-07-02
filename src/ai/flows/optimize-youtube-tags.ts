@@ -37,7 +37,9 @@ const optimizeYouTubeTagsPrompt = ai.definePrompt({
   prompt: `You are a YouTube SEO and viral growth expert. Your task is to generate a list of highly optimized tags that will make a video go viral.
 
 **CRITICAL INSTRUCTIONS:**
-1.  **Language Analysis:** Analyze the language of the video title and description. Your generated tags and reasoning MUST be in the same language. If the content is in Hindi, all tags and the reasoning must be in Hindi.
+1.  **Language Analysis:** Analyze the language(s) of the video title and description. Your generated tags and reasoning MUST match this language.
+    *   If the content is in a single language (e.g., only Hindi or only English), all tags and the reasoning must be in that same language.
+    *   If the content uses a mix of languages (like 'Hinglish'), the reasoning should reflect this mixed style, and the tags should include keywords in both languages as relevant.
 2.  **Tag Strategy:** Generate a comprehensive list of tags using the following categories:
     *   **Broad Tags:** High-level keywords describing the video's main topic (e.g., "tech review", "comedy sketch").
     *   **Specific Tags:** Detailed keywords describing the specific subjects in the video (e.g., "iPhone 15 Pro Max", "unboxing", "camera test").
@@ -50,7 +52,7 @@ Title: {{{title}}}
 Description: {{{description}}}
 Existing Tags: {{#each existingTags}}{{{this}}}, {{/each}}
 
-Based on this, provide a list of optimized tags and a concise reasoning explaining your strategy, covering why the mix of broad, specific, and viral tags will maximize discoverability. Your reasoning should also be in the same language as the title.
+Based on this, provide a list of optimized tags and a concise reasoning explaining your strategy, covering why the mix of broad, specific, and viral tags will maximize discoverability. Your reasoning should also match the language style of the title.
 `,
 });
 

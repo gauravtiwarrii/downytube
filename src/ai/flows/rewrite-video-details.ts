@@ -36,7 +36,9 @@ const rewriteVideoDetailsPrompt = ai.definePrompt({
   prompt: `You are a world-class YouTube growth hacker and viral marketing expert. Your task is to rewrite a video's title and description to make it go viral.
 
 **CRITICAL INSTRUCTIONS:**
-1.  **Language Matching:** First, detect the primary language of the 'Original Title'. Your entire response—both the rewritten title and description—MUST be in that same language. If it's Hindi, you write in Hindi. If it's English, you write in English. Do not mix languages.
+1.  **Language Matching:** Analyze the language of the 'Original Title'.
+    *   If it's in a single language (e.g., only Hindi or only English), your entire response—rewritten title and description—MUST be in that same language.
+    *   If the original title is a mix of languages (like Hindi and English, often called 'Hinglish'), you MUST preserve this style. Your rewritten title and description should also be in Hinglish, blending the languages naturally just like a top creator would.
 2.  **Viral Title Formula:** The title must be extremely compelling and create a strong sense of curiosity or urgency. Use proven formulas:
     *   X vs. Y (e.g., "Budget Phone vs. Pro Phone: The UNEXPECTED Winner")
     *   The Shocking Truth About...
