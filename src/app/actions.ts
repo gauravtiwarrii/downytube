@@ -161,6 +161,7 @@ export async function uploadToYouTube(video: Video) {
           `drawtext=text='${video.watermarkText.replace(/'/g, "''")}':x=10:y=H-th-10:fontsize=36:fontcolor=white@0.8:shadowcolor=black@0.5:shadowx=2:shadowy=2`
         )
         .format('mp4')
+        .addOutputOptions('-movflags', 'frag_keyframe+empty_moov')
         .on('error', (err) => {
           console.error('FFmpeg Error:', err.message);
           ffmpegError = new Error(`FFmpeg error: ${err.message}. Make sure ffmpeg is installed on the server environment.`);
@@ -218,7 +219,108 @@ export async function uploadToYouTube(video: Video) {
     console.error('Error uploading to YouTube:', error);
     let errorMessage = 'An unknown error occurred during upload.';
     if (error instanceof Error) {
-        if (error.message === 'NOT_AUTHENTICATED') {
+        if (error.message.includes('NOT_AUTHENTICATED')) {
+            errorMessage = 'You are not connected to a YouTube account. Please connect your account first.'
+        } else {
+            errorMessage = error.message;
+        }
+    }
+    return { success: false, error: errorMessage };
+  }
+}
+
+const timeStringToSeconds = (time: string): number => {
+    const parts = time.split(':').map(part => parseInt(part, 10));
+    if (parts.length === 2) { // MM:SS
+        return parts[0] * 60 + parts[1];
+    }
+    if (parts.length === 3) { // HH:MM:SS
+        return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    }
+    return NaN;
+};
+
+
+export async function generateAndUploadClip(input: {
+  youtubeUrl: string;
+  startTime: string;
+  endTime: string;
+  title: string;
+  description: string;
+}) {
+  try {
+    const youtube = await getYouTubeClient();
+
+    const ytdlStream = ytdl(input.youtubeUrl, {
+      quality: 'highest',
+    });
+    
+    const passThrough = new PassThrough();
+    let ffmpegError: Error | null = null;
+    
+    const duration = timeStringToSeconds(input.endTime) - timeStringToSeconds(input.startTime);
+    if (isNaN(duration) || duration <= 0) {
+        return { success: false, error: "Invalid start or end time provided." };
+    }
+
+    const ffmpegCommand = ffmpeg(ytdlStream)
+      .setStartTime(input.startTime)
+      .setDuration(duration)
+      .withVideoFilter([
+        'split[original][copy]',
+        '[copy]scale=720:1280,crop=720:1280,boxblur=20[background]',
+        '[original]scale=720:-1[scaled_video]',
+        '[background][scaled_video]overlay=(W-w)/2:(H-h)/2'
+      ])
+      .withAspectRatio('9:16')
+      .toFormat('mp4')
+      .addOutputOptions('-movflags', 'frag_keyframe+empty_moov')
+      .on('error', (err) => {
+        console.error('FFmpeg Error:', err.message);
+        ffmpegError = new Error(`FFmpeg error: ${err.message}. Make sure ffmpeg is installed on the server environment.`);
+        passThrough.destroy(ffmpegError);
+      });
+
+    const streamToUpload = ffmpegCommand.pipe(passThrough, { end: true });
+
+    const videoResponse = await youtube.videos.insert({
+      part: ['snippet', 'status'],
+      requestBody: {
+        snippet: {
+          title: input.title,
+          description: input.description,
+          categoryId: '22',
+        },
+        status: {
+          privacyStatus: 'private',
+        },
+      },
+      media: {
+        body: streamToUpload,
+      },
+    });
+
+    if (ffmpegError) {
+      throw ffmpegError;
+    }
+
+    const videoId = videoResponse.data.id;
+    if (!videoId) {
+      throw new Error('Failed to get video ID after upload.');
+    }
+    
+    return { 
+        success: true, 
+        data: { 
+            videoId: videoId, 
+            youtubeUrl: `https://www.youtube.com/watch?v=${videoId}` 
+        } 
+    };
+  } catch (error) {
+    console.error('Error generating or uploading clip:', error);
+    let errorMessage = 'An unknown error occurred during the process.';
+    if (error instanceof Error) {
+        if (error.message.includes('NOT_AUTHENTICATED')) {
             errorMessage = 'You are not connected to a YouTube account. Please connect your account first.'
         } else {
             errorMessage = error.message;
