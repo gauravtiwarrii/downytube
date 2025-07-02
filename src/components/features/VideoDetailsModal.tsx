@@ -95,7 +95,7 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
       try {
         const link = document.createElement('a');
         link.href = result.data.downloadUrl;
-        const safeTitle = result.data.title.replace(/[^a-z0-9_\\-. ]/gi, '_');
+        const safeTitle = result.data.title.replace(/[^a-z0-9_ .-]/gi, '_');
         link.setAttribute('download', `${safeTitle}.mp4`);
         document.body.appendChild(link);
         link.click();
