@@ -17,9 +17,9 @@ import {
 } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Sparkles, Info, Download } from 'lucide-react';
+import { Loader2, Sparkles, Info, Download, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getOptimizedTags, getDownloadUrl } from '@/app/actions';
+import { getOptimizedTags, getDownloadUrl, getRewrittenDetails } from '@/app/actions';
 import type { Video } from '@/types';
 
 type VideoDetailsModalProps = {
@@ -28,19 +28,20 @@ type VideoDetailsModalProps = {
 };
 
 const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => {
-  const [isLoading, setIsLoading] = useState(false);
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [isRewriting, setIsRewriting] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
   const handleOptimizeTags = async () => {
-    setIsLoading(true);
+    setIsOptimizing(true);
     const result = await getOptimizedTags({
       title: video.title,
       description: video.description,
       existingTags: video.tags,
     });
-    setIsLoading(false);
+    setIsOptimizing(false);
 
     if (result.success && result.data) {
       onUpdateVideo(video.id, {
@@ -59,6 +60,32 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
       });
     }
   };
+  
+  const handleRewriteDetails = async () => {
+    setIsRewriting(true);
+    const result = await getRewrittenDetails({
+      title: video.title,
+      description: video.description,
+    });
+    setIsRewriting(false);
+
+    if (result.success && result.data) {
+      onUpdateVideo(video.id, {
+        rewrittenTitle: result.data.rewrittenTitle,
+        rewrittenDescription: result.data.rewrittenDescription,
+      });
+      toast({
+        title: 'Rewrite Complete',
+        description: 'The title and description have been rewritten by AI.',
+      });
+    } else {
+      toast({
+        variant: 'destructive',
+        title: 'Rewrite Failed',
+        description: result.error || 'An unknown error occurred.',
+      });
+    }
+  };
 
   const handleDownloadVideo = async () => {
     setIsDownloading(true);
@@ -68,7 +95,7 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
       try {
         const link = document.createElement('a');
         link.href = result.data.downloadUrl;
-        const safeTitle = result.data.title.replace(/[^a-z0-9_\-. ]/gi, '_');
+        const safeTitle = result.data.title.replace(/[^a-z0-9_\\-. ]/gi, '_');
         link.setAttribute('download', `${safeTitle}.mp4`);
         document.body.appendChild(link);
         link.click();
@@ -103,9 +130,9 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{video.title}</DialogTitle>
+          <DialogTitle>{video.rewrittenTitle || video.title}</DialogTitle>
           <DialogDescription>
-            View video details and optimize tags with AI.
+            View video details, download, and use AI tools.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-4">
@@ -113,7 +140,7 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
             <AccordionItem value="description">
               <AccordionTrigger>Description</AccordionTrigger>
               <AccordionContent className="text-sm text-muted-foreground whitespace-pre-wrap">
-                {video.description}
+                {video.rewrittenDescription || video.description}
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="tags">
@@ -133,6 +160,29 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
           <div className="rounded-lg border bg-card/50 p-4 space-y-4">
             <div className="flex justify-between items-start">
               <div>
+                <h4 className="font-semibold text-foreground">AI Content Rewriter</h4>
+                <p className="text-sm text-muted-foreground">
+                  Use AI to improve the title and description for engagement.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                onClick={handleRewriteDetails}
+                disabled={isRewriting}
+              >
+                {isRewriting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Pencil className="mr-2 h-4 w-4" />
+                )}
+                Rewrite
+              </Button>
+            </div>
+          </div>
+
+          <div className="rounded-lg border bg-card/50 p-4 space-y-4">
+            <div className="flex justify-between items-start">
+              <div>
                 <h4 className="font-semibold text-foreground">AI Tag Optimizer</h4>
                 <p className="text-sm text-muted-foreground">
                   Generate SEO-friendly tags to improve discovery.
@@ -141,9 +191,9 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
               <Button
                 size="sm"
                 onClick={handleOptimizeTags}
-                disabled={isLoading}
+                disabled={isOptimizing}
               >
-                {isLoading ? (
+                {isOptimizing ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                   <Sparkles className="mr-2 h-4 w-4 text-accent" />

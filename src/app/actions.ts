@@ -1,6 +1,7 @@
 'use server';
 
 import { optimizeYouTubeTags, OptimizeYouTubeTagsInput } from '@/ai/flows/optimize-youtube-tags';
+import { rewriteVideoDetails, RewriteVideoDetailsInput } from '@/ai/flows/rewrite-video-details';
 import ytdl from '@distube/ytdl-core';
 import type { Video } from '@/types';
 
@@ -10,6 +11,17 @@ export async function getOptimizedTags(data: OptimizeYouTubeTagsInput) {
     return { success: true, data: result };
   } catch (error) {
     console.error('Error optimizing tags:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+    return { success: false, error: errorMessage };
+  }
+}
+
+export async function getRewrittenDetails(data: RewriteVideoDetailsInput) {
+  try {
+    const result = await rewriteVideoDetails(data);
+    return { success: true, data: result };
+  } catch (error) {
+    console.error('Error rewriting details:', error);
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
     return { success: false, error: errorMessage };
   }

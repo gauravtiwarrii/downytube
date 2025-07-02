@@ -8,4 +8,6 @@ export interface Video {
   tags: string[];
   optimizedTags?: string[];
   reasoning?: string;
+  rewrittenTitle?: string;
+  rewrittenDescription?: string;
 }
