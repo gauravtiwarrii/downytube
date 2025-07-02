@@ -6,7 +6,8 @@ import { generateThumbnail, GenerateThumbnailInput } from '@/ai/flows/generate-t
 import { getYouTubeClient, getTokensFromCookie } from '@/lib/youtube-auth';
 import ytdl from '@distube/ytdl-core';
 import type { Video } from '@/types';
-import { Readable } from 'stream';
+import { PassThrough, Readable } from 'stream';
+import ffmpeg from 'fluent-ffmpeg';
 
 
 export async function checkAuthStatus() {
@@ -144,13 +145,32 @@ export async function uploadToYouTube(video: Video) {
   try {
     const youtube = await getYouTubeClient();
 
-    // 1. Get video stream
-    const videoStream = ytdl(video.youtubeUrl, { 
+    const ytdlStream = ytdl(video.youtubeUrl, {
       filter: 'videoandaudio',
-      quality: 'highest' 
+      quality: 'highest',
     });
 
-    // 2. Upload video
+    let streamToUpload: Readable = ytdlStream;
+    let ffmpegError: Error | null = null;
+
+    if (video.watermarkText) {
+      const passThrough = new PassThrough();
+      
+      const ffmpegCommand = ffmpeg(ytdlStream)
+        .videoFilter(
+          `drawtext=text='${video.watermarkText.replace(/'/g, "''")}':x=10:y=H-th-10:fontsize=36:fontcolor=white@0.8:shadowcolor=black@0.5:shadowx=2:shadowy=2`
+        )
+        .format('mp4')
+        .on('error', (err) => {
+          console.error('FFmpeg Error:', err.message);
+          ffmpegError = new Error(`FFmpeg error: ${err.message}. Make sure ffmpeg is installed on the server environment.`);
+          passThrough.destroy(ffmpegError);
+        });
+
+      streamToUpload = ffmpegCommand.pipe(passThrough, { end: true });
+    }
+
+    // 1. Upload video
     const videoResponse = await youtube.videos.insert({
       part: ['snippet', 'status'],
       requestBody: {
@@ -158,23 +178,27 @@ export async function uploadToYouTube(video: Video) {
           title: video.rewrittenTitle || video.title,
           description: video.rewrittenDescription || video.description,
           tags: video.optimizedTags || video.tags,
-          categoryId: '22', // Default category, e.g., 'People & Blogs'
+          categoryId: '22',
         },
         status: {
-          privacyStatus: 'private', // or 'public', 'unlisted'
+          privacyStatus: 'private',
         },
       },
       media: {
-        body: videoStream,
+        body: streamToUpload,
       },
     });
+
+    if (ffmpegError) {
+      throw ffmpegError;
+    }
 
     const videoId = videoResponse.data.id;
     if (!videoId) {
       throw new Error('Failed to get video ID after upload.');
     }
 
-    // 3. Upload thumbnail
+    // 2. Upload thumbnail
     let thumbnailDataUri = video.thumbnailUrl;
     if (!thumbnailDataUri.startsWith('data:')) {
       thumbnailDataUri = await imageUrlToDataUri(thumbnailDataUri);

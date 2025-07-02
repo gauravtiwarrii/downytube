@@ -17,7 +17,8 @@ import {
 } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Sparkles, Info, Download, Pencil, Copy, Image as ImageIcon, Upload, ExternalLink, LogIn } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Loader2, Sparkles, Info, Download, Pencil, Copy, Image as ImageIcon, Upload, ExternalLink, LogIn, Text } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getOptimizedTags, getDownloadUrl, getRewrittenDetails, getGeneratedThumbnail, uploadToYouTube, checkAuthStatus } from '@/app/actions';
 import type { Video } from '@/types';
@@ -35,6 +36,7 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
   const [isUploading, setIsUploading] = useState(false);
   const [open, setOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [watermark, setWatermark] = useState(video.watermarkText || '');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -214,6 +216,14 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
         description: 'Could not trigger the thumbnail download in your browser.',
       });
     }
+  };
+
+  const handleApplyWatermark = () => {
+    onUpdateVideo(video.id, { watermarkText: watermark });
+    toast({
+      title: 'Watermark Applied',
+      description: 'The watermark will be burned into the video during the YouTube upload.',
+    });
   };
 
   const handleUploadToYouTube = async () => {
@@ -431,6 +441,32 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
                 </div>
               </div>
             )}
+          </div>
+          
+          <div className="rounded-lg border bg-card/50 p-4 space-y-4">
+            <div className="flex justify-between items-start flex-wrap gap-4">
+              <div>
+                <h4 className="font-semibold text-foreground">Add Watermark</h4>
+                <p className="text-sm text-muted-foreground">
+                  Enter text to burn into the video upon upload.
+                </p>
+              </div>
+              <div className="flex gap-2 items-center">
+                <Input
+                  placeholder="Your watermark text..."
+                  value={watermark}
+                  onChange={(e) => setWatermark(e.target.value)}
+                  className="w-48"
+                />
+                <Button
+                  size="sm"
+                  onClick={handleApplyWatermark}
+                  disabled={!watermark || watermark === video.watermarkText}
+                >
+                  Apply
+                </Button>
+              </div>
+            </div>
           </div>
 
           <div className="rounded-lg border bg-card/50 p-4 space-y-4">

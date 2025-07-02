@@ -10,4 +10,5 @@ export interface Video {
   reasoning?: string;
   rewrittenTitle?: string;
   rewrittenDescription?: string;
+  watermarkText?: string;
 }
