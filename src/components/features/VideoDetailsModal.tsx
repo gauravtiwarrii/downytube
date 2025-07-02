@@ -17,9 +17,9 @@ import {
 } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Sparkles, Info, Download, Pencil, Copy } from 'lucide-react';
+import { Loader2, Sparkles, Info, Download, Pencil, Copy, Image as ImageIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getOptimizedTags, getDownloadUrl, getRewrittenDetails } from '@/app/actions';
+import { getOptimizedTags, getDownloadUrl, getRewrittenDetails, getGeneratedThumbnail } from '@/app/actions';
 import type { Video } from '@/types';
 
 type VideoDetailsModalProps = {
@@ -31,6 +31,7 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [isRewriting, setIsRewriting] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false);
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
@@ -114,6 +115,32 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
     }
   };
 
+  const handleGenerateThumbnail = async () => {
+    setIsGeneratingThumbnail(true);
+    const result = await getGeneratedThumbnail({
+      title: video.rewrittenTitle || video.title,
+      description: video.rewrittenDescription || video.description,
+      existingThumbnailUrl: video.thumbnailUrl,
+    });
+    setIsGeneratingThumbnail(false);
+
+    if (result.success && result.data) {
+      onUpdateVideo(video.id, {
+        thumbnailUrl: result.data.thumbnailDataUri,
+      });
+      toast({
+        title: 'Thumbnail Generated',
+        description: 'A new AI-powered thumbnail has been generated.',
+      });
+    } else {
+      toast({
+        variant: 'destructive',
+        title: 'Thumbnail Generation Failed',
+        description: result.error || 'An unknown error occurred.',
+      });
+    }
+  };
+
   const handleDownloadVideo = async () => {
     setIsDownloading(true);
     const result = await getDownloadUrl(video.youtubeUrl);
@@ -150,6 +177,7 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
 
   const currentTitle = video.rewrittenTitle || video.title;
   const currentDescription = video.rewrittenDescription || video.description;
+  const isAiBusy = isRewriting || isOptimizing || isGeneratingThumbnail;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -228,6 +256,29 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
           <div className="rounded-lg border bg-card/50 p-4 space-y-4">
             <div className="flex justify-between items-start">
               <div>
+                <h4 className="font-semibold text-foreground">AI Thumbnail Generator</h4>
+                <p className="text-sm text-muted-foreground">
+                  Use AI to generate a new, similar thumbnail.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                onClick={handleGenerateThumbnail}
+                disabled={isAiBusy}
+              >
+                {isGeneratingThumbnail ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <ImageIcon className="mr-2 h-4 w-4" />
+                )}
+                Regenerate
+              </Button>
+            </div>
+          </div>
+
+          <div className="rounded-lg border bg-card/50 p-4 space-y-4">
+            <div className="flex justify-between items-start">
+              <div>
                 <h4 className="font-semibold text-foreground">AI Content Rewriter</h4>
                 <p className="text-sm text-muted-foreground">
                   Use AI to improve the title and description for engagement.
@@ -236,7 +287,7 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
               <Button
                 size="sm"
                 onClick={handleRewriteDetails}
-                disabled={isRewriting}
+                disabled={isAiBusy}
               >
                 {isRewriting ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -259,7 +310,7 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
               <Button
                 size="sm"
                 onClick={handleOptimizeTags}
-                disabled={isOptimizing}
+                disabled={isAiBusy}
               >
                 {isOptimizing ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
