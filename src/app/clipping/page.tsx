@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { analyzeVideoForClips } from '@/app/actions';
-import { Loader2, Scissors, Wand2, Star } from 'lucide-react';
+import { analyzeVideoForClips, getGeneratedTranscript, findClipsFromTranscript } from '@/app/actions';
+import { Loader2, Scissors, Wand2, Star, FileText } from 'lucide-react';
 import type { Video, TranscriptItem } from '@/types';
 import Image from 'next/image';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -27,10 +27,11 @@ type ClipSuggestion = {
     reasoning: string;
 };
 
-type AnalysisState = 'idle' | 'loading' | 'success' | 'error';
+type AnalysisState = 'idle' | 'loading' | 'success' | 'error' | 'needsGeneration';
 
 export default function ClippingPage() {
     const [analysisState, setAnalysisState] = useState<AnalysisState>('idle');
+    const [isGenerating, setIsGenerating] = useState(false);
     const [url, setUrl] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [videoInfo, setVideoInfo] = useState<Video | null>(null);
@@ -57,18 +58,12 @@ export default function ClippingPage() {
 
         if (result.success && result.data) {
             setVideoInfo(result.data.video);
-            setSuggestions(result.data.suggestions);
-            setTranscript(result.data.transcript);
-            setAnalysisState('success');
-            if (result.data.transcriptError) {
-                toast({
-                    variant: 'destructive',
-                    title: 'AI Analysis Skipped',
-                    description: result.data.transcriptError,
-                    duration: 7000,
-                });
-                setShowManualForm(true); // Go straight to manual form
+            if (result.data.transcriptError === 'NEEDS_GENERATION') {
+                setAnalysisState('needsGeneration');
             } else {
+                setTranscript(result.data.transcript);
+                setSuggestions(result.data.suggestions);
+                setAnalysisState('success');
                 toast({ title: 'Analysis Complete!', description: 'AI has found some viral clip ideas for you.' });
             }
         } else {
@@ -76,6 +71,54 @@ export default function ClippingPage() {
             setAnalysisState('error');
             setVideoInfo(null);
             toast({ variant: 'destructive', title: 'Analysis Failed', description: result.error });
+        }
+    };
+
+    const handleGenerateTranscript = async () => {
+        if (!videoInfo) return;
+
+        setIsGenerating(true);
+        toast({
+            title: 'Generating Transcript...',
+            description: 'AI is transcribing the audio. This may take several minutes for longer videos.',
+        });
+
+        const transcriptResult = await getGeneratedTranscript(videoInfo.youtubeUrl);
+
+        if (!transcriptResult.success || !transcriptResult.data?.transcript) {
+            setError(transcriptResult.error || 'Failed to generate transcript.');
+            setAnalysisState('error');
+            toast({ variant: 'destructive', title: 'Transcription Failed', description: transcriptResult.error });
+            setIsGenerating(false);
+            return;
+        }
+
+        const newTranscript = transcriptResult.data.transcript;
+        setTranscript(newTranscript);
+        toast({ title: 'Transcript Generated!', description: 'Now analyzing for viral clips...' });
+
+        try {
+            const clipsResult = await findClipsFromTranscript({
+                videoTitle: videoInfo.title,
+                transcript: newTranscript,
+            });
+
+            const newSuggestions = clipsResult.clips.map((clip) => ({
+                ...clip,
+                startTimeString: formatTime(clip.startTime),
+                endTimeString: formatTime(clip.endTime),
+            }));
+
+            setSuggestions(newSuggestions);
+            setAnalysisState('success');
+            toast({ title: 'Analysis Complete!', description: 'AI has found viral clips from the generated transcript.' });
+        } catch (e) {
+            const clipError = e instanceof Error ? e.message : 'Unknown error finding clips.';
+            setError(clipError);
+            setAnalysisState('error');
+            toast({ variant: 'destructive', title: 'Clip Analysis Failed', description: clipError });
+        } finally {
+            setIsGenerating(false);
         }
     };
     
@@ -128,9 +171,51 @@ export default function ClippingPage() {
                         <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
                         <h3 className="mt-4 text-lg font-semibold">Analyzing Video...</h3>
                         <p className="mt-1 text-sm text-muted-foreground">
-                            AI is scanning the transcript for viral moments. This may take a moment.
+                           Checking for transcripts and metadata...
                         </p>
                     </Card>
+                );
+            case 'needsGeneration':
+                return (
+                    <div>
+                         <Card className="mb-8 overflow-hidden">
+                           <CardContent className="p-6">
+                                <div className="flex flex-col md:flex-row gap-6 items-start">
+                                    <div className="relative w-full md:w-48 aspect-video flex-shrink-0 rounded-lg overflow-hidden">
+                                        {videoInfo && (
+                                            <Image src={videoInfo.thumbnailUrl} alt={videoInfo.title} layout="fill" objectFit="cover" />
+                                        )}
+                                    </div>
+                                    <div className="flex-grow">
+                                        <h3 className="text-xl font-bold">{videoInfo?.title}</h3>
+                                        <div className="mt-4 flex gap-2">
+                                            <Button variant="outline" onClick={handleBack}>Analyze New Video</Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                        <Card className="text-center p-8">
+                            <FileText className="mx-auto h-12 w-12 text-primary" />
+                            <h3 className="mt-4 text-lg font-semibold">AI Transcription Required</h3>
+                            <p className="mt-1 text-sm text-muted-foreground max-w-md mx-auto">
+                                A transcript was not found for this video. Generate one with AI to find viral clips. This may take several minutes for longer videos.
+                            </p>
+                             <Button onClick={handleGenerateTranscript} disabled={isGenerating} className="mt-6">
+                                {isGenerating ? (
+                                    <>
+                                     <Loader2 className="animate-spin" />
+                                     Generating...
+                                    </>
+                                ) : (
+                                    <>
+                                     <Wand2 />
+                                     Generate Transcript
+                                    </>
+                                )}
+                            </Button>
+                        </Card>
+                    </div>
                 );
             case 'success':
                 return (
@@ -225,9 +310,9 @@ export default function ClippingPage() {
                                     </div>
                                 ) : (
                                      <Card className="text-center p-8">
-                                        <h3 className="text-lg font-semibold">AI Analysis Skipped</h3>
+                                        <h3 className="text-lg font-semibold">AI Could Not Find Suggestions</h3>
                                         <p className="mt-1 text-sm text-muted-foreground">
-                                            A transcript could not be found for this video. You can still create a clip manually.
+                                            The AI analyzed the transcript but couldn't find any clear clip suggestions. You can still create a clip manually.
                                         </p>
                                     </Card>
                                 )}
@@ -245,7 +330,7 @@ export default function ClippingPage() {
             case 'error':
                  return (
                     <Card className="text-center p-8 border-destructive">
-                         <h3 className="text-lg font-semibold text-destructive">Analysis Failed</h3>
+                         <h3 className="text-lg font-semibold text-destructive">Process Failed</h3>
                          <p className="mt-1 text-sm text-muted-foreground">{error}</p>
                          <Button onClick={handleBack} className="mt-4">Try Again</Button>
                     </Card>

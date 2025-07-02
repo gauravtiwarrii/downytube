@@ -4,10 +4,11 @@ import { optimizeYouTubeTags, OptimizeYouTubeTagsInput } from '@/ai/flows/optimi
 import { rewriteVideoDetails, RewriteVideoDetailsInput } from '@/ai/flows/rewrite-video-details';
 import { generateThumbnail, GenerateThumbnailInput } from '@/ai/flows/generate-thumbnail';
 import { findViralClips, FindViralClipsInput } from '@/ai/flows/find-viral-clips';
+import { generateTranscript } from '@/ai/flows/generate-transcript';
 import { getYouTubeClient, getTokensFromCookie } from '@/lib/youtube-auth';
 import { formatTime } from '@/lib/utils';
 import ytdl from '@distube/ytdl-core';
-import type { Video } from '@/types';
+import type { Video, TranscriptItem } from '@/types';
 import { PassThrough, Readable } from 'stream';
 import ffmpeg from 'fluent-ffmpeg';
 import { YoutubeTranscript } from 'youtube-transcript';
@@ -266,10 +267,7 @@ export async function analyzeVideoForClips(url: string) {
     };
   } catch (e) {
     console.error('Error fetching video info in analyzeVideoForClips:', e);
-    const errorMessage =
-      e instanceof Error
-        ? e.message
-        : 'An unknown error occurred during video analysis.';
+    const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred during video analysis.';
     return { success: false, error: errorMessage };
   }
 
@@ -279,22 +277,10 @@ export async function analyzeVideoForClips(url: string) {
       throw new Error('Transcript not found or is empty');
     }
 
-    const aiInput: FindViralClipsInput = {
+    const suggestionsResult = await findClipsFromTranscript({
       videoTitle: video.title,
-      transcript: transcript.map((t) => ({
-        ...t,
-        offset: t.offset,
-        duration: t.duration,
-      })),
-    };
-    const suggestionsResult = await findViralClips(aiInput);
-
-    if (!suggestionsResult || !suggestionsResult.clips) {
-      return {
-        success: false,
-        error: 'The AI could not find any clip suggestions.',
-      };
-    }
+      transcript: transcript.map((t) => ({ ...t, offset: t.offset, duration: t.duration })),
+    });
 
     return {
       success: true,
@@ -310,24 +296,66 @@ export async function analyzeVideoForClips(url: string) {
       },
     };
   } catch (e) {
-    console.error(
-      'Error fetching transcript or running AI in analyzeVideoForClips:',
-      e
-    );
-    const transcriptError =
-      'Could not fetch a transcript for this video. It might be disabled or in an unsupported language.';
+    console.error('Error fetching transcript or running AI in analyzeVideoForClips:', e);
+    // This is not a fatal error for the user, just means they need to generate a transcript
     return {
       success: true,
       data: {
         video,
         transcript: [],
         suggestions: [],
-        transcriptError,
+        transcriptError: 'NEEDS_GENERATION',
       },
     };
   }
 }
 
+export async function findClipsFromTranscript(input: FindViralClipsInput) {
+    const suggestionsResult = await findViralClips(input);
+
+    if (!suggestionsResult || !suggestionsResult.clips) {
+      throw new Error('The AI could not find any clip suggestions from the provided transcript.');
+    }
+
+    return suggestionsResult;
+}
+
+export async function getGeneratedTranscript(youtubeUrl: string) {
+  try {
+    const audioStream = ytdl(youtubeUrl, { 
+      filter: 'audioonly', 
+      quality: 'lowestaudio'
+    });
+
+    const wavBuffer = await new Promise<Buffer>((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        const ffmpegProcess = ffmpeg(audioStream)
+            .toFormat('wav')
+            .on('error', (err) => reject(new Error(`FFmpeg error during conversion: ${err.message}`)))
+            .on('end', () => resolve(Buffer.concat(chunks)));
+        
+        const writableStream = new PassThrough();
+        writableStream.on('data', (chunk) => chunks.push(chunk));
+        
+        ffmpegProcess.pipe(writableStream, { end: true });
+    });
+
+    const audioDataUri = `data:audio/wav;base64,${wavBuffer.toString('base64')}`;
+
+    const result = await generateTranscript({ audioDataUri });
+
+    if (!result || !result.transcript) {
+        throw new Error("AI failed to generate a transcript.");
+    }
+    
+    return { success: true, data: { transcript: result.transcript } };
+
+  } catch (error) {
+    console.error('Error in getGeneratedTranscript:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred during transcript generation.';
+    return { success: false, error: errorMessage };
+  }
+}
 
 export async function generateAndUploadClip(input: {
   youtubeUrl: string;
