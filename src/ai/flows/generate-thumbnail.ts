@@ -13,7 +13,7 @@ import {z} from 'genkit';
 const GenerateThumbnailInputSchema = z.object({
   title: z.string().describe('The title of the YouTube video.'),
   description: z.string().describe('The description of the YouTube video.'),
-  existingThumbnailUrl: z.string().url().describe('The URL of the existing thumbnail to base the new one on.')
+  existingThumbnailUrl: z.string().describe('The URL or data URI of the existing thumbnail to base the new one on.')
 });
 export type GenerateThumbnailInput = z.infer<typeof GenerateThumbnailInputSchema>;
 
@@ -51,12 +51,14 @@ const generateThumbnailFlow = ai.defineFlow(
   async (input) => {
     let prompt: any;
 
+    // If the thumbnail is a placeholder or already a data URI, generate a new one from scratch.
     if (input.existingThumbnailUrl.startsWith('data:') || input.existingThumbnailUrl.includes('placehold.co')) {
         prompt = `Generate a professional, high-resolution YouTube thumbnail for a video with the following details. The image should be eye-catching, high-contrast, and directly related to the video's content. Avoid using any text or logos. Focus on a single, compelling visual that sparks curiosity.
       
         Title: "${input.title}"
         Description: "${input.description}"`;
     } else {
+        // If it's a real URL, fetch it and use it as context to improve upon.
         const existingThumbnailDataUri = await imageUrlToDataUri(input.existingThumbnailUrl);
         prompt = [
             {media: {url: existingThumbnailDataUri}},
