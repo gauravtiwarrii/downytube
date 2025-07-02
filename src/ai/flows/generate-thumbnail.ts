@@ -72,20 +72,20 @@ Create a high-resolution, 16:9 aspect ratio image that embodies these principles
         const existingThumbnailDataUri = await imageUrlToDataUri(input.existingThumbnailUrl);
         prompt = [
             {media: {url: existingThumbnailDataUri}},
-            {text: `You are a world-class photo editor and YouTube strategist. Your goal is to take the provided image and video details and create a dramatically improved version for a YouTube thumbnail.
+            {text: `You are a world-class photo editor. Your goal is to take the provided image and create a subtly enhanced version for a YouTube thumbnail, making it look higher quality while staying very close to the original.
 
-**Your improvements should focus on:**
-*   **Enhanced Dynamism:** Re-imagine the composition with more dramatic angles, a sense of motion, or a more compelling focus on the subject.
-*   **Cinematic Lighting:** Add professional, cinematic lighting. Increase contrast, deepen shadows, and add highlights to make the subject pop.
-*   **Vibrant Color Grading:** Apply a professional color grade to make the image more vibrant and eye-catching. The colors should be saturated but look realistic and high-quality.
-*   **Maintain the Core Subject:** The new image must be clearly based on the original, retaining the same subject and general theme.
+**Your enhancements should focus on:**
+*   **Preserving the Original:** This is the most important rule. The final image MUST look like a slightly better version of the original photo. Do not change the composition, subject, or angle.
+*   **Lighting & Contrast:** Make minor adjustments to lighting. Improve contrast to make the subject stand out, but keep it natural.
+*   **Color Correction:** Apply a subtle color grade to make the colors a little more vibrant, but do not change the color palette.
+*   **Sharpening:** Slightly sharpen the image to make it look crisper and more professional.
 *   **Absolutely No Text:** Do not add any text, logos, or watermarks.
 
-**Video Details:**
+**Video Details (for context only):**
 *   **Title:** "${input.title}"
 *   **Description:** "${input.description}"
 
-Generate a new, high-resolution image that is visually superior and more clickable than the original, following all the principles above.`},
+Generate a new, high-resolution image that is a high-quality, refined version of the original, following all the principles above.`},
         ];
     }
 
