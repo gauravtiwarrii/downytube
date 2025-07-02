@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import { google } from 'googleapis';
 import { cookies } from 'next/headers';
 import { SignJWT, jwtVerify } from 'jose';
