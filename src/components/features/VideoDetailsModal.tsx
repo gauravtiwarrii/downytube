@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Sparkles, Info, Download, Pencil, Copy, Image as ImageIcon, Upload } from 'lucide-react';
+import { Loader2, Sparkles, Info, Download, Pencil, Copy, Image as ImageIcon, Upload, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getOptimizedTags, getDownloadUrl, getRewrittenDetails, getGeneratedThumbnail, uploadToYouTube } from '@/app/actions';
 import type { Video } from '@/types';
@@ -211,24 +211,26 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
 
   const handleUploadToYouTube = async () => {
     setIsUploading(true);
-    const result = await uploadToYouTube({
-      title: video.rewrittenTitle || video.title,
-      description: video.rewrittenDescription || video.description,
-      tags: video.optimizedTags || video.tags,
-      thumbnailDataUri: video.thumbnailUrl,
-      videoUrl: video.youtubeUrl
-    });
+    const result = await uploadToYouTube(video);
     setIsUploading(false);
 
     if (result.success) {
       toast({
-        title: 'Upload to YouTube',
-        description: 'This is a placeholder action. The feature is not fully implemented.',
+        title: 'Upload Successful!',
+        description: 'Your video has been uploaded to YouTube.',
+        action: (
+          <a href={result.data.youtubeUrl} target="_blank" rel="noopener noreferrer">
+            <Button variant="outline" size="sm">
+              <ExternalLink className="mr-2 h-4 w-4" />
+              View Video
+            </Button>
+          </a>
+        )
       });
     } else {
       toast({
         variant: 'destructive',
-        title: 'Upload Feature Not Implemented',
+        title: 'Upload Failed',
         description: result.error,
       });
     }
@@ -469,9 +471,6 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
                 Upload
               </Button>
             </div>
-             <p className="text-xs text-muted-foreground italic pt-2 border-t border-primary/20">
-              Note: This feature is a placeholder. Full implementation requires you to set up Google OAuth 2.0 credentials in your project.
-            </p>
           </div>
 
         </div>

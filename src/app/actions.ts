@@ -3,8 +3,16 @@
 import { optimizeYouTubeTags, OptimizeYouTubeTagsInput } from '@/ai/flows/optimize-youtube-tags';
 import { rewriteVideoDetails, RewriteVideoDetailsInput } from '@/ai/flows/rewrite-video-details';
 import { generateThumbnail, GenerateThumbnailInput } from '@/ai/flows/generate-thumbnail';
+import { getYouTubeClient, getTokensFromCookie } from '@/lib/youtube-auth';
 import ytdl from '@distube/ytdl-core';
 import type { Video } from '@/types';
+import { Readable } from 'stream';
+
+
+export async function checkAuthStatus() {
+  const tokens = await getTokensFromCookie();
+  return !!tokens;
+}
 
 export async function getOptimizedTags(data: OptimizeYouTubeTagsInput) {
   try {
@@ -39,7 +47,6 @@ export async function getGeneratedThumbnail(data: GenerateThumbnailInput) {
   }
 }
 
-
 export async function getVideoMetadata(url: string) {
   try {
     if (!ytdl.validateURL(url)) {
@@ -53,33 +60,10 @@ export async function getVideoMetadata(url: string) {
 
     const videoDetails = info.videoDetails;
 
-    let description = 'No description available.';
-    if (videoDetails.description) {
-      if (typeof videoDetails.description === 'string') {
-        description = videoDetails.description;
-      } else if (
-        typeof videoDetails.description === 'object' &&
-        videoDetails.description !== null
-      ) {
-        const descObj = videoDetails.description as {
-          simpleText?: string;
-          runs?: { text: string }[];
-        };
-        if (descObj.simpleText) {
-          description = descObj.simpleText;
-        } else if (Array.isArray(descObj.runs)) {
-          description = descObj.runs.map((run) => run.text).join('');
-        }
-      }
-    }
-    if (!description.trim()) {
-      description = 'No description available.';
-    }
-
     const newVideo: Video = {
       id: videoDetails.videoId,
       title: videoDetails.title || 'No title available',
-      description: description,
+      description: videoDetails.description || 'No description available.',
       thumbnailUrl: `https://i.ytimg.com/vi/${videoDetails.videoId}/hqdefault.jpg`,
       youtubeUrl: videoDetails.video_url,
       tags: videoDetails.keywords || [],
@@ -131,17 +115,70 @@ export async function getDownloadUrl(url: string) {
   }
 }
 
-export async function uploadToYouTube(data: any) {
-  console.log('Placeholder: Upload to YouTube triggered with:', data);
-  // This is a placeholder. A real implementation would require:
-  // 1. Setting up Google OAuth 2.0 credentials in the Google Cloud Console.
-  // 2. Implementing an OAuth flow to get the user's permission and access token.
-  // 3. Using the googleapis library to interact with the YouTube Data API v3.
-  // 4. Downloading the actual video file to a temporary location on the server.
-  // 5. Reading the video file as a stream and sending it to youtube.videos.insert.
-  // 6. Sending the thumbnail data to youtube.thumbnails.set.
-  return {
-    success: false,
-    error: 'This feature is not fully implemented and requires Google OAuth 2.0 setup.',
-  };
+function dataUriToReadableStream(dataUri: string): Readable {
+  const base64Data = dataUri.split(',')[1];
+  const buffer = Buffer.from(base64Data, 'base64');
+  const stream = new Readable();
+  stream.push(buffer);
+  stream.push(null); // Signal the end of the stream
+  return stream;
+}
+
+export async function uploadToYouTube(video: Video) {
+  try {
+    const youtube = await getYouTubeClient();
+
+    // 1. Get video stream
+    const videoStream = ytdl(video.youtubeUrl, { 
+      filter: 'videoandaudio',
+      quality: 'highest' 
+    });
+
+    // 2. Upload video
+    const videoResponse = await youtube.videos.insert({
+      part: ['snippet', 'status'],
+      requestBody: {
+        snippet: {
+          title: video.rewrittenTitle || video.title,
+          description: video.rewrittenDescription || video.description,
+          tags: video.optimizedTags || video.tags,
+          categoryId: '22', // Default category, e.g., 'People & Blogs'
+        },
+        status: {
+          privacyStatus: 'private', // or 'public', 'unlisted'
+        },
+      },
+      media: {
+        body: videoStream,
+      },
+    });
+
+    const videoId = videoResponse.data.id;
+    if (!videoId) {
+      throw new Error('Failed to get video ID after upload.');
+    }
+
+    // 3. Upload thumbnail
+    const thumbnailStream = dataUriToReadableStream(video.thumbnailUrl);
+    await youtube.thumbnails.set({
+      videoId: videoId,
+      media: {
+        mimeType: video.thumbnailUrl.substring(video.thumbnailUrl.indexOf(':') + 1, video.thumbnailUrl.indexOf(';')),
+        body: thumbnailStream,
+      },
+    });
+
+    return { success: true, data: { videoId: videoId, youtubeUrl: `https://www.youtube.com/watch?v=${videoId}` } };
+  } catch (error) {
+    console.error('Error uploading to YouTube:', error);
+    let errorMessage = 'An unknown error occurred during upload.';
+    if (error instanceof Error) {
+        if (error.message === 'NOT_AUTHENTICATED') {
+            errorMessage = 'You are not connected to a YouTube account. Please connect your account first.'
+        } else {
+            errorMessage = error.message;
+        }
+    }
+    return { success: false, error: errorMessage };
+  }
 }
