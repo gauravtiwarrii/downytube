@@ -33,28 +33,39 @@ export async function getVideoMetadata(url: string) {
       return { success: false, error: 'Invalid YouTube URL provided.' };
     }
     const info = await ytdl.getInfo(url);
+
+    if (!info || !info.videoDetails) {
+      return { success: false, error: 'Could not retrieve video details.' };
+    }
+
     const videoDetails = info.videoDetails;
 
     let description = 'No description available.';
     if (videoDetails.description) {
       if (typeof videoDetails.description === 'string') {
         description = videoDetails.description;
-      } else if (typeof videoDetails.description === 'object') {
-        const descObj = videoDetails.description as any;
+      } else if (
+        typeof videoDetails.description === 'object' &&
+        videoDetails.description !== null
+      ) {
+        const descObj = videoDetails.description as {
+          simpleText?: string;
+          runs?: { text: string }[];
+        };
         if (descObj.simpleText) {
           description = descObj.simpleText;
         } else if (Array.isArray(descObj.runs)) {
-          description = descObj.runs.map((run: any) => run.text).join('');
+          description = descObj.runs.map((run) => run.text).join('');
         }
       }
     }
     if (!description.trim()) {
-        description = 'No description available.';
+      description = 'No description available.';
     }
 
     const newVideo: Video = {
       id: videoDetails.videoId,
-      title: videoDetails.title,
+      title: videoDetails.title || 'No title available',
       description: description,
       thumbnailUrl: `https://i.ytimg.com/vi/${videoDetails.videoId}/hqdefault.jpg`,
       youtubeUrl: videoDetails.video_url,
@@ -68,7 +79,10 @@ export async function getVideoMetadata(url: string) {
     };
   } catch (error) {
     console.error('Error fetching video metadata:', error);
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred while fetching video metadata.';
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : 'An unknown error occurred while fetching video metadata.';
     return { success: false, error: errorMessage };
   }
 }
