@@ -9,20 +9,21 @@ const COOKIE_NAME = 'youtube_auth_token';
 // Ensure these are set in your .env file
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const YOUTUBE_REDIRECT_URI = process.env.YOUTUBE_REDIRECT_URI;
+const NEXT_PUBLIC_BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 const AUTH_SECRET = process.env.AUTH_SECRET;
 
-if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !YOUTUBE_REDIRECT_URI || !AUTH_SECRET) {
-  throw new Error('Missing Google OAuth credentials or AUTH_SECRET in environment variables.');
+if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !NEXT_PUBLIC_BASE_URL || !AUTH_SECRET) {
+  throw new Error('Missing Google OAuth credentials, base URL, or AUTH_SECRET in environment variables.');
 }
 
 const secretKey = new TextEncoder().encode(AUTH_SECRET);
 
 export function getGoogleOAuthClient() {
+  const redirectUri = `${NEXT_PUBLIC_BASE_URL}/api/auth/google/callback`;
   return new google.auth.OAuth2(
     GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET,
-    YOUTUBE_REDIRECT_URI
+    redirectUri
   );
 }
 
