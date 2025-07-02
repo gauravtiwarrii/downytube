@@ -35,10 +35,22 @@ export async function getVideoMetadata(url: string) {
     const info = await ytdl.getInfo(url);
     const videoDetails = info.videoDetails;
 
-    const description =
-      (typeof videoDetails.description === 'object' && videoDetails.description !== null
-        ? (videoDetails.description as any)?.simpleText
-        : videoDetails.description) || 'No description available.';
+    let description = 'No description available.';
+    if (videoDetails.description) {
+      if (typeof videoDetails.description === 'string') {
+        description = videoDetails.description;
+      } else if (typeof videoDetails.description === 'object') {
+        const descObj = videoDetails.description as any;
+        if (descObj.simpleText) {
+          description = descObj.simpleText;
+        } else if (Array.isArray(descObj.runs)) {
+          description = descObj.runs.map((run: any) => run.text).join('');
+        }
+      }
+    }
+    if (!description.trim()) {
+        description = 'No description available.';
+    }
 
     const newVideo: Video = {
       id: videoDetails.videoId,
