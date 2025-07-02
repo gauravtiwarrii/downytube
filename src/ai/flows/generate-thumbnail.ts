@@ -53,39 +53,40 @@ const generateThumbnailFlow = ai.defineFlow(
 
     // If the thumbnail is a placeholder or already a data URI from our app, generate a new one from scratch.
     if (input.existingThumbnailUrl.startsWith('data:') || input.existingThumbnailUrl.includes('placehold.co')) {
-        prompt = `You are a professional graphic designer specializing in viral YouTube thumbnails. Your task is to create a thumbnail for a video with the title and description below.
+        prompt = `You are a viral marketing expert who creates thumbnails that get millions of clicks on YouTube. Your task is to create a thumbnail for a video with the title and description below, following proven viral strategies.
 
-**Key principles for this thumbnail:**
-*   **Visually Arresting:** Use vibrant, saturated colors and strong contrast to grab attention immediately.
-*   **Cinematic Quality:** The image should look like a still from a high-quality film. Think dynamic lighting, interesting angles, and a sense of depth.
-*   **Single Focal Point:** The thumbnail must have one clear, compelling subject. Avoid clutter.
-*   **Emotionally Evocative:** The image should spark curiosity, excitement, or another strong emotion relevant to the video's topic.
-*   **Absolutely No Text:** Do not include any letters, words, or logos in the image. The visual alone should tell the story.
+**Key principles for a viral thumbnail:**
+*   **Extreme Visual Impact:** Use hyper-saturated, vibrant colors and extreme contrast. The image must be impossible to ignore.
+*   **Dynamic & Action-Packed:** The scene should feel like it's in motion. Use dynamic angles, action poses, and a sense of energy.
+*   **One Clear Story:** The thumbnail must tell a simple, powerful story or ask a question. Have a single, unmissable focal point. Avoid clutter at all costs.
+*   **Intense Emotion:** If a person is the subject, their face must show an exaggerated, high-stakes emotion (e.g., shock, joy, fear, curiosity). This is critical for engagement.
+*   **Absolutely No Text:** Do not include any text, logos, or watermarks. The visual must do all the work.
 
 **Video Details:**
 *   **Title:** "${input.title}"
 *   **Description:** "${input.description}"
 
-Create a high-resolution, 16:9 aspect ratio image that embodies these principles.`;
+Create a high-resolution, 16:9 aspect ratio image that embodies these viral principles. Make it look like a top creator's thumbnail.`;
     } else {
         // If it's a real URL, fetch it and use it as context to improve upon.
         const existingThumbnailDataUri = await imageUrlToDataUri(input.existingThumbnailUrl);
         prompt = [
             {media: {url: existingThumbnailDataUri}},
-            {text: `You are a world-class photo editor. Your goal is to take the provided image and create a subtly enhanced version for a YouTube thumbnail, making it look higher quality while staying very close to the original.
+            {text: `You are a viral marketing expert specializing in YouTube thumbnails. Your task is to take the provided image and transform it into an incredibly click-worthy thumbnail that will maximize views. While you should use the original image as a base, you must make it dramatically more eye-catching.
 
-**Your enhancements should focus on:**
-*   **Preserving the Original:** This is the most important rule. The final image MUST look like a slightly better version of the original photo. Do not change the composition, subject, or angle.
-*   **Lighting & Contrast:** Make minor adjustments to lighting. Improve contrast to make the subject stand out, but keep it natural.
-*   **Color Correction:** Apply a subtle color grade to make the colors a little more vibrant, but do not change the color palette.
-*   **Sharpening:** Slightly sharpen the image to make it look crisper and more professional.
-*   **Absolutely No Text:** Do not add any text, logos, or watermarks.
+**Your transformation should focus on:**
+*   **Dramatize, Don't Replace:** Use the core subject from the original image, but re-imagine the scene to be more dynamic and visually exciting. Change the background if needed to create a more compelling story.
+*   **Extreme Contrast and Saturation:** Make the colors pop. Use vibrant, almost unnatural colors to grab attention in a crowded feed. Boost the contrast significantly.
+*   **Dynamic Lighting:** Add dramatic lighting effects, like lens flares, glows, or cinematic rim lighting, to make the subject stand out.
+*   **Exaggerated Emotion:** If there is a person, subtly amplify their emotional expression to be more intense (e.g., more surprise, more shock, more excitement).
+*   **Focus and Clarity:** Ensure the main subject is tack-sharp and pops from the background, which can be slightly blurred.
+*   **Absolutely No Text:** Do not add any text, logos, or watermarks to the image itself.
 
 **Video Details (for context only):**
 *   **Title:** "${input.title}"
 *   **Description:** "${input.description}"
 
-Generate a new, high-resolution image that is a high-quality, refined version of the original, following all the principles above.`},
+Generate a new, high-resolution image that is a viral, attention-grabbing version of the original, following all the principles above.`},
         ];
     }
 
