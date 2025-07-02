@@ -9,8 +9,12 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { analyzeVideoForClips } from '@/app/actions';
 import { Loader2, Scissors, Wand2, Star } from 'lucide-react';
-import type { Video } from '@/types';
+import type { Video, TranscriptItem } from '@/types';
 import Image from 'next/image';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { formatTime } from '@/lib/utils';
+
 
 type ClipSuggestion = {
     startTime: number;
@@ -31,6 +35,7 @@ export default function ClippingPage() {
     const [error, setError] = useState<string | null>(null);
     const [videoInfo, setVideoInfo] = useState<Video | null>(null);
     const [suggestions, setSuggestions] = useState<ClipSuggestion[]>([]);
+    const [transcript, setTranscript] = useState<TranscriptItem[]>([]);
     const [selectedClip, setSelectedClip] = useState<ClipSuggestion | null>(null);
     const [showManualForm, setShowManualForm] = useState(false);
     const [uploadedClipUrl, setUploadedClipUrl] = useState<string | null>(null);
@@ -53,6 +58,7 @@ export default function ClippingPage() {
         if (result.success && result.data) {
             setVideoInfo(result.data.video);
             setSuggestions(result.data.suggestions);
+            setTranscript(result.data.transcript);
             setAnalysisState('success');
             if (result.data.transcriptError) {
                 toast({
@@ -83,6 +89,7 @@ export default function ClippingPage() {
         setUrl('');
         setVideoInfo(null);
         setSuggestions([]);
+        setTranscript([]);
         setSelectedClip(null);
         setShowManualForm(false);
         setUploadedClipUrl(null);
@@ -145,6 +152,26 @@ export default function ClippingPage() {
                                 </div>
                             </CardContent>
                         </Card>
+                        
+                        {transcript.length > 0 && (
+                            <Accordion type="single" collapsible className="w-full mb-8">
+                                <AccordionItem value="item-1">
+                                    <AccordionTrigger>View Full Transcript</AccordionTrigger>
+                                    <AccordionContent>
+                                        <ScrollArea className="h-72 w-full rounded-md border p-4">
+                                            {transcript.map((item, index) => (
+                                                <p key={index} className="mb-3 text-sm">
+                                                    <span className="font-mono text-xs text-muted-foreground mr-3 bg-background/50 p-1 rounded">
+                                                        {formatTime(item.offset / 1000)}
+                                                    </span>
+                                                    {item.text}
+                                                </p>
+                                            ))}
+                                        </ScrollArea>
+                                    </AccordionContent>
+                                </AccordionItem>
+                            </Accordion>
+                        )}
                         
                         {selectedClip ? (
                              <ClippingForm

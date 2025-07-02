@@ -5,6 +5,7 @@ import { rewriteVideoDetails, RewriteVideoDetailsInput } from '@/ai/flows/rewrit
 import { generateThumbnail, GenerateThumbnailInput } from '@/ai/flows/generate-thumbnail';
 import { findViralClips, FindViralClipsInput } from '@/ai/flows/find-viral-clips';
 import { getYouTubeClient, getTokensFromCookie } from '@/lib/youtube-auth';
+import { formatTime } from '@/lib/utils';
 import ytdl from '@distube/ytdl-core';
 import type { Video } from '@/types';
 import { PassThrough, Readable } from 'stream';
@@ -242,13 +243,6 @@ const timeStringToSeconds = (time: string): number => {
     return NaN;
 };
 
-const formatTime = (seconds: number): string => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-    const pad = (num: number) => String(num).padStart(2, '0');
-    return `${pad(minutes)}:${pad(remainingSeconds)}`;
-};
-
 export async function analyzeVideoForClips(url: string) {
   let video: Video;
   try {
@@ -306,6 +300,7 @@ export async function analyzeVideoForClips(url: string) {
       success: true,
       data: {
         video,
+        transcript,
         suggestions: suggestionsResult.clips.map((clip) => ({
           ...clip,
           startTimeString: formatTime(clip.startTime),
@@ -325,6 +320,7 @@ export async function analyzeVideoForClips(url: string) {
       success: true,
       data: {
         video,
+        transcript: [],
         suggestions: [],
         transcriptError,
       },

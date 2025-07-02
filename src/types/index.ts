@@ -12,3 +12,9 @@ export interface Video {
   rewrittenDescription?: string;
   watermarkText?: string;
 }
+
+export type TranscriptItem = {
+  text: string;
+  offset: number; // in milliseconds
+  duration: number; // in milliseconds
+};
