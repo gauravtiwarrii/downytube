@@ -322,26 +322,31 @@ export async function findClipsFromTranscript(input: FindViralClipsInput) {
 
 export async function getGeneratedTranscript(youtubeUrl: string) {
   try {
-    const audioStream = ytdl(youtubeUrl, { 
-      filter: 'audioonly', 
-      quality: 'lowestaudio'
+    // 1. Get video info to find the best audio format
+    const info = await ytdl.getInfo(youtubeUrl);
+    const format = ytdl.chooseFormat(info.formats, {
+      filter: 'audioonly',
+      quality: 'lowestaudio',
     });
 
-    const wavBuffer = await new Promise<Buffer>((resolve, reject) => {
-        const chunks: Buffer[] = [];
-        const ffmpegProcess = ffmpeg(audioStream)
-            .toFormat('wav')
-            .on('error', (err) => reject(new Error(`FFmpeg error during conversion: ${err.message}`)))
-            .on('end', () => resolve(Buffer.concat(chunks)));
-        
-        const writableStream = new PassThrough();
-        writableStream.on('data', (chunk) => chunks.push(chunk));
-        
-        ffmpegProcess.pipe(writableStream, { end: true });
-    });
+    if (!format) {
+      return { success: false, error: 'Could not find a suitable audio-only format for this video.' };
+    }
 
-    const audioDataUri = `data:audio/wav;base64,${wavBuffer.toString('base64')}`;
+    // 2. Download the audio stream into a buffer
+    const audioStream = ytdl.downloadFromInfo(info, { format });
+    const audioChunks: Buffer[] = [];
+    for await (const chunk of audioStream) {
+      audioChunks.push(chunk);
+    }
+    const audioBuffer = Buffer.concat(audioChunks);
 
+    // 3. Create a data URI with the correct MIME type
+    // The Gemini API can handle common audio formats directly, avoiding ffmpeg.
+    const mimeType = format.mimeType?.split(';')[0] || 'audio/mp4';
+    const audioDataUri = `data:${mimeType};base64,${audioBuffer.toString('base64')}`;
+    
+    // 4. Send to the AI for transcription
     const result = await generateTranscript({ audioDataUri });
 
     if (!result || !result.transcript) {
@@ -352,7 +357,14 @@ export async function getGeneratedTranscript(youtubeUrl: string) {
 
   } catch (error) {
     console.error('Error in getGeneratedTranscript:', error);
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred during transcript generation.';
+    let errorMessage = error instanceof Error ? error.message : 'An unknown error occurred during transcript generation.';
+    
+    if (errorMessage.includes('Request payload size exceeds the limit')) {
+      errorMessage = 'The video audio is too large for the AI to process. Please try a shorter video.';
+    } else if (errorMessage.includes('Invalid media')) {
+      errorMessage = 'The AI could not process the audio format from this video. Please try a different one.';
+    }
+
     return { success: false, error: errorMessage };
   }
 }
