@@ -52,7 +52,7 @@ const generateThumbnailFlow = ai.defineFlow(
     let prompt: any;
 
     if (input.existingThumbnailUrl.startsWith('data:') || input.existingThumbnailUrl.includes('placehold.co')) {
-        prompt = `Generate a visually appealing and clickable YouTube thumbnail for a video with the following details. The thumbnail should be vibrant, high-contrast, and clearly represent the video's content. Avoid using any text in the image.
+        prompt = `Generate a visually appealing and clickable YouTube thumbnail for a video with the following details. The thumbnail should be vibrant, high-contrast, and clearly represent the video's content. It is crucial that you DO NOT include any text, letters, or words in the generated image. The thumbnail must be purely visual.
       
         Title: "${input.title}"
         Description: "${input.description}"`;
@@ -60,7 +60,7 @@ const generateThumbnailFlow = ai.defineFlow(
         const existingThumbnailDataUri = await imageUrlToDataUri(input.existingThumbnailUrl);
         prompt = [
             {media: {url: existingThumbnailDataUri}},
-            {text: `Generate a new, visually appealing and clickable YouTube thumbnail that is similar in style and subject to the provided image, but with a different composition or angle. The thumbnail should be vibrant, high-contrast, and clearly represent the video's content. Use the following video details for context. Avoid using any text in the image.
+            {text: `Generate a new, visually appealing and clickable YouTube thumbnail that is similar in style and subject to the provided image, but with a different composition or angle. The thumbnail should be vibrant, high-contrast, and clearly represent the video's content. Use the following video details for context. It is crucial that you DO NOT include any text, letters, or words in the generated image. The thumbnail must be purely visual.
             
             Title: "${input.title}"
             Description: "${input.description}"`},
