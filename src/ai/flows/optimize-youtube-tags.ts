@@ -34,16 +34,23 @@ const optimizeYouTubeTagsPrompt = ai.definePrompt({
   name: 'optimizeYouTubeTagsPrompt',
   input: {schema: OptimizeYouTubeTagsInputSchema},
   output: {schema: OptimizeYouTubeTagsOutputSchema},
-  prompt: `You are an expert in YouTube SEO and tag optimization.
-  Given the title, description, and existing tags of a YouTube video, you will generate a list of optimized tags to improve its search ranking and discoverability.
+  prompt: `You are a YouTube SEO and viral growth expert. Your task is to generate a list of highly optimized tags that will make a video go viral.
 
-  Title: {{{title}}}
-  Description: {{{description}}}
-  Existing Tags: {{#each existingTags}}{{{this}}}, {{/each}}
+**CRITICAL INSTRUCTIONS:**
+1.  **Language Analysis:** Analyze the language of the video title and description. Your generated tags and reasoning MUST be in the same language. If the content is in Hindi, all tags and the reasoning must be in Hindi.
+2.  **Tag Strategy:** Generate a comprehensive list of tags using the following categories:
+    *   **Broad Tags:** High-level keywords describing the video's main topic (e.g., "tech review", "comedy sketch").
+    *   **Specific Tags:** Detailed keywords describing the specific subjects in the video (e.g., "iPhone 15 Pro Max", "unboxing", "camera test").
+    *   **Trending/Viral Tags:** Include relevant tags that are currently trending or have viral potential. Think about what people are searching for *right now*.
+    *   **Misspelling Tags:** Include common misspellings of your main keywords to capture that traffic.
+3.  **Leverage Competitors:** Think about what tags the top-ranking videos on this topic are using and incorporate similar ideas.
 
-  Provide a list of optimized tags, and a short reasoning for each tag.
-  Ensure that the tags are relevant to the video content and target audience.
-  Do not include any of the existing tags unless they are highly relevant.
+**Video Information:**
+Title: {{{title}}}
+Description: {{{description}}}
+Existing Tags: {{#each existingTags}}{{{this}}}, {{/each}}
+
+Based on this, provide a list of optimized tags and a concise reasoning explaining your strategy, covering why the mix of broad, specific, and viral tags will maximize discoverability. Your reasoning should also be in the same language as the title.
 `,
 });
 
