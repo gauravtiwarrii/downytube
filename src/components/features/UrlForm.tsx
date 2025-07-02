@@ -16,6 +16,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Download, Loader2 } from 'lucide-react';
 import type { Video } from '@/types';
+import { getVideoMetadata } from '@/app/actions';
 
 const FormSchema = z.object({
   url: z.string().url({ message: 'Please enter a valid URL.' }).refine(
@@ -71,25 +72,22 @@ const UrlForm = ({ onAddVideo, existingIds }: UrlFormProps) => {
       return;
     }
 
-    // Simulate download and metadata extraction
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    const result = await getVideoMetadata(data.url);
 
-    const newVideo: Video = {
-      id: videoId,
-      youtubeUrl: data.url,
-      title: `Placeholder Title for Video ${videoId}`,
-      description: 'This is a simulated description for the downloaded video. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
-      thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-      videoUrl: '#',
-      tags: ['simulated', 'video', 'placeholder', 'youtube'],
-    };
-
-    onAddVideo(newVideo);
-    toast({
-      title: 'Video Added!',
-      description: 'The video has been added to your list.',
-    });
-    form.reset();
+    if (result.success && result.data) {
+      onAddVideo(result.data);
+      toast({
+        title: 'Video Added!',
+        description: 'The video metadata has been fetched and added to your list.',
+      });
+      form.reset();
+    } else {
+      toast({
+        variant: 'destructive',
+        title: 'Download Failed',
+        description: result.error || 'Could not fetch video metadata.',
+      });
+    }
     setIsLoading(false);
   }
 
