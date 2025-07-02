@@ -17,9 +17,9 @@ import {
 } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Sparkles, Info, Download, Pencil, Copy, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Sparkles, Info, Download, Pencil, Copy, Image as ImageIcon, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getOptimizedTags, getDownloadUrl, getRewrittenDetails, getGeneratedThumbnail } from '@/app/actions';
+import { getOptimizedTags, getDownloadUrl, getRewrittenDetails, getGeneratedThumbnail, uploadToYouTube } from '@/app/actions';
 import type { Video } from '@/types';
 
 type VideoDetailsModalProps = {
@@ -32,6 +32,7 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
   const [isRewriting, setIsRewriting] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
@@ -149,7 +150,7 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
       try {
         const link = document.createElement('a');
         link.href = result.data.downloadUrl;
-        const safeTitle = result.data.title.replace(/[^a-z0-9_\-.]/gi, '_');
+        const safeTitle = result.data.title.replace(/[^a-z0-9_.-]/gi, '_');
         link.setAttribute('download', `${safeTitle}.mp4`);
         document.body.appendChild(link);
         link.click();
@@ -179,7 +180,7 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
     try {
       const link = document.createElement('a');
       link.href = video.thumbnailUrl;
-      const safeTitle = (video.rewrittenTitle || video.title).replace(/[^a-z0-9_\-.]/gi, '_');
+      const safeTitle = (video.rewrittenTitle || video.title).replace(/[^a-z0-9_.-]/gi, '_');
 
       let extension = 'jpg';
       if (video.thumbnailUrl.startsWith('data:image/png')) {
@@ -208,9 +209,35 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
     }
   };
 
+  const handleUploadToYouTube = async () => {
+    setIsUploading(true);
+    const result = await uploadToYouTube({
+      title: video.rewrittenTitle || video.title,
+      description: video.rewrittenDescription || video.description,
+      tags: video.optimizedTags || video.tags,
+      thumbnailDataUri: video.thumbnailUrl,
+      videoUrl: video.youtubeUrl
+    });
+    setIsUploading(false);
+
+    if (result.success) {
+      toast({
+        title: 'Upload to YouTube',
+        description: 'This is a placeholder action. The feature is not fully implemented.',
+      });
+    } else {
+      toast({
+        variant: 'destructive',
+        title: 'Upload Feature Not Implemented',
+        description: result.error,
+      });
+    }
+  };
+
+
   const currentTitle = video.rewrittenTitle || video.title;
   const currentDescription = video.rewrittenDescription || video.description;
-  const isAiBusy = isRewriting || isOptimizing || isGeneratingThumbnail;
+  const isAiBusy = isRewriting || isOptimizing || isGeneratingThumbnail || isUploading;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -419,6 +446,34 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
               </Button>
             </div>
           </div>
+
+          <div className="rounded-lg border border-primary/50 bg-primary/10 p-4 space-y-2">
+            <div className="flex justify-between items-start flex-wrap gap-4">
+              <div>
+                <h4 className="font-semibold text-primary-foreground">Upload to YouTube</h4>
+                <p className="text-sm text-muted-foreground">
+                  Automatically upload the video with all AI enhancements.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                onClick={handleUploadToYouTube}
+                disabled={isAiBusy || isDownloading}
+                variant="default"
+              >
+                {isUploading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="mr-2 h-4 w-4" />
+                )}
+                Upload
+              </Button>
+            </div>
+             <p className="text-xs text-muted-foreground italic pt-2 border-t border-primary/20">
+              Note: This feature is a placeholder. Full implementation requires you to set up Google OAuth 2.0 credentials in your project.
+            </p>
+          </div>
+
         </div>
       </DialogContent>
     </Dialog>
