@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Sparkles, Info, Download, Pencil } from 'lucide-react';
+import { Loader2, Sparkles, Info, Download, Pencil, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getOptimizedTags, getDownloadUrl, getRewrittenDetails } from '@/app/actions';
 import type { Video } from '@/types';
@@ -33,6 +33,33 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
   const [isDownloading, setIsDownloading] = useState(false);
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
+
+  const handleCopy = (text: string | string[] | undefined, toastDescription: string) => {
+    if (!text || (Array.isArray(text) && text.length === 0)) {
+      toast({
+        variant: 'destructive',
+        title: 'Nothing to Copy',
+        description: 'The content is empty.',
+      });
+      return;
+    }
+
+    const textToCopy = Array.isArray(text) ? text.join(', ') : text;
+
+    navigator.clipboard.writeText(textToCopy).then(() => {
+      toast({
+        title: 'Copied to Clipboard',
+        description: toastDescription,
+      });
+    }).catch(err => {
+      console.error('Failed to copy text: ', err);
+      toast({
+        variant: 'destructive',
+        title: 'Copy Failed',
+        description: 'Could not copy text to the clipboard.',
+      });
+    });
+  };
 
   const handleOptimizeTags = async () => {
     setIsOptimizing(true);
@@ -121,6 +148,9 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
     setIsDownloading(false);
   };
 
+  const currentTitle = video.rewrittenTitle || video.title;
+  const currentDescription = video.rewrittenDescription || video.description;
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -130,7 +160,17 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{video.rewrittenTitle || video.title}</DialogTitle>
+          <div className="flex items-start justify-between gap-2">
+            <DialogTitle>{currentTitle}</DialogTitle>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="flex-shrink-0"
+              onClick={() => handleCopy(currentTitle, 'The title has been copied.')}
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
           <DialogDescription>
             View video details, download, and use AI tools.
           </DialogDescription>
@@ -139,19 +179,47 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
           <Accordion type="single" collapsible defaultValue="description">
             <AccordionItem value="description">
               <AccordionTrigger>Description</AccordionTrigger>
-              <AccordionContent className="text-sm text-muted-foreground whitespace-pre-wrap">
-                {video.rewrittenDescription || video.description}
+              <AccordionContent>
+                <div className="relative">
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap pr-10">
+                    {currentDescription}
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute -top-2 right-0"
+                    onClick={() => handleCopy(currentDescription, 'The description has been copied.')}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="tags">
               <AccordionTrigger>Original Tags</AccordionTrigger>
               <AccordionContent>
-                <div className="flex flex-wrap gap-2">
-                  {video.tags.map((tag) => (
-                    <Badge key={tag} variant="secondary">
-                      {tag}
-                    </Badge>
-                  ))}
+                <div className="relative">
+                  <div className="flex flex-wrap gap-2 pr-10">
+                    {video.tags.length > 0 ? (
+                      video.tags.map((tag) => (
+                        <Badge key={tag} variant="secondary">
+                          {tag}
+                        </Badge>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No original tags found.</p>
+                    )}
+                  </div>
+                  {video.tags.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute -top-2 right-0"
+                      onClick={() => handleCopy(video.tags, 'The original tags have been copied.')}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </AccordionContent>
             </AccordionItem>
@@ -205,7 +273,16 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
             {video.optimizedTags && (
               <div className="space-y-4 pt-4 border-t">
                 <div>
-                  <h5 className="font-medium text-sm">Optimized Tags</h5>
+                  <div className="flex justify-between items-center">
+                    <h5 className="font-medium text-sm">Optimized Tags</h5>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleCopy(video.optimizedTags, 'The optimized tags have been copied.')}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
                   <div className="flex flex-wrap gap-2 mt-2">
                     {video.optimizedTags.map((tag) => (
                       <Badge key={tag} variant="default" className="bg-primary/20 text-primary-foreground border-primary/50 hover:bg-primary/30">
