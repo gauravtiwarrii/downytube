@@ -17,9 +17,9 @@ import {
 } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Sparkles, Info } from 'lucide-react';
+import { Loader2, Sparkles, Info, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getOptimizedTags } from '@/app/actions';
+import { getOptimizedTags, getDownloadUrl } from '@/app/actions';
 import type { Video } from '@/types';
 
 type VideoDetailsModalProps = {
@@ -29,6 +29,7 @@ type VideoDetailsModalProps = {
 
 const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => {
   const [isLoading, setIsLoading] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
@@ -57,6 +58,40 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
         description: result.error || 'An unknown error occurred.',
       });
     }
+  };
+
+  const handleDownloadVideo = async () => {
+    setIsDownloading(true);
+    const result = await getDownloadUrl(video.youtubeUrl);
+
+    if (result.success && result.data) {
+      try {
+        const link = document.createElement('a');
+        link.href = result.data.downloadUrl;
+        const safeTitle = result.data.title.replace(/[^a-z0-9_\-. ]/gi, '_');
+        link.setAttribute('download', `${safeTitle}.mp4`);
+        document.body.appendChild(link);
+        link.click();
+        link.parentNode?.removeChild(link);
+        toast({
+          title: 'Download Started',
+          description: `Downloading "${result.data.title}".`,
+        });
+      } catch (error) {
+        toast({
+          variant: 'destructive',
+          title: 'Download Failed',
+          description: 'Could not trigger the download in your browser.',
+        });
+      }
+    } else {
+      toast({
+        variant: 'destructive',
+        title: 'Download Failed',
+        description: result.error || 'An unknown error occurred.',
+      });
+    }
+    setIsDownloading(false);
   };
 
   return (
@@ -139,6 +174,29 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
                 </div>
               </div>
             )}
+          </div>
+
+          <div className="rounded-lg border bg-card/50 p-4 space-y-4">
+            <div className="flex justify-between items-start">
+              <div>
+                <h4 className="font-semibold text-foreground">Download Video</h4>
+                <p className="text-sm text-muted-foreground">
+                  Download the video file in the highest available quality with audio.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                onClick={handleDownloadVideo}
+                disabled={isDownloading}
+              >
+                {isDownloading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="mr-2 h-4 w-4" />
+                )}
+                Download
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>

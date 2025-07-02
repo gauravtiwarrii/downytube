@@ -43,3 +43,34 @@ export async function getVideoMetadata(url: string) {
     return { success: false, error: errorMessage };
   }
 }
+
+export async function getDownloadUrl(url: string) {
+  try {
+    if (!ytdl.validateURL(url)) {
+      return { success: false, error: 'Invalid YouTube URL provided.' };
+    }
+    const info = await ytdl.getInfo(url);
+    const format = ytdl.chooseFormat(info.formats, {
+      quality: 'highest',
+      filter: 'videoandaudio',
+    });
+    
+    if (!format.url) {
+      return {
+        success: false,
+        error: 'Could not find a downloadable format with both video and audio. This can happen with some high-quality or protected videos.',
+      };
+    }
+    return {
+      success: true,
+      data: { downloadUrl: format.url, title: info.videoDetails.title },
+    };
+  } catch (error) {
+    console.error('Error fetching download URL:', error);
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : 'An unknown error occurred while fetching the download URL.';
+    return { success: false, error: errorMessage };
+  }
+}
