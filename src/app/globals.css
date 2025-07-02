@@ -65,4 +65,7 @@
   body {
     @apply bg-background text-foreground;
   }
+  mark {
+    @apply bg-primary/30 text-primary-foreground rounded px-1;
+  }
 }

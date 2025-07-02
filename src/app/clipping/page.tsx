@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Header from '@/components/layout/Header';
 import ClippingForm from '@/components/features/ClippingForm';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,7 @@ export default function ClippingPage() {
     const [videoInfo, setVideoInfo] = useState<Video | null>(null);
     const [suggestions, setSuggestions] = useState<ClipSuggestion[]>([]);
     const [transcript, setTranscript] = useState<TranscriptItem[]>([]);
+    const [transcriptQuery, setTranscriptQuery] = useState('');
     const [selectedClip, setSelectedClip] = useState<ClipSuggestion | null>(null);
     const [showManualForm, setShowManualForm] = useState(false);
     const [uploadedClipUrl, setUploadedClipUrl] = useState<string | null>(null);
@@ -80,7 +81,7 @@ export default function ClippingPage() {
         setIsGenerating(true);
         toast({
             title: 'Generating Transcript...',
-            description: 'AI is transcribing the audio. This may take several minutes for longer videos.',
+            description: 'This may take several minutes for longer videos.',
         });
 
         const transcriptResult = await getGeneratedTranscript(videoInfo.youtubeUrl);
@@ -136,6 +137,7 @@ export default function ClippingPage() {
         setSelectedClip(null);
         setShowManualForm(false);
         setUploadedClipUrl(null);
+        setTranscriptQuery('');
     }
     
     const onUploadSuccess = (finalUrl: string) => {
@@ -143,6 +145,28 @@ export default function ClippingPage() {
         setUploadedClipUrl(finalUrl);
         setSelectedClip(null); 
     }
+
+    const highlightText = (text: string, query: string): React.ReactNode => {
+        if (!query.trim()) return text;
+        const parts = text.split(new RegExp(`(${query})`, 'gi'));
+        return (
+          <span>
+            {parts.map((part, i) =>
+              part.toLowerCase() === query.toLowerCase() ? (
+                <mark key={i}>{part}</mark>
+              ) : (
+                part
+              )
+            )}
+          </span>
+        );
+      };
+
+    const filteredTranscript = useMemo(() => {
+        if (!transcriptQuery) return transcript;
+        return transcript.filter(item => item.text.toLowerCase().includes(transcriptQuery.toLowerCase()));
+    }, [transcript, transcriptQuery]);
+
 
     const renderContent = () => {
         if (uploadedClipUrl) {
@@ -241,18 +265,32 @@ export default function ClippingPage() {
                         {transcript.length > 0 && (
                             <Accordion type="single" collapsible className="w-full mb-8">
                                 <AccordionItem value="item-1">
-                                    <AccordionTrigger>View Full Transcript</AccordionTrigger>
+                                    <AccordionTrigger>View & Search Full Transcript</AccordionTrigger>
                                     <AccordionContent>
-                                        <ScrollArea className="h-72 w-full rounded-md border p-4">
-                                            {transcript.map((item, index) => (
-                                                <p key={index} className="mb-3 text-sm">
-                                                    <span className="font-mono text-xs text-muted-foreground mr-3 bg-background/50 p-1 rounded">
-                                                        {formatTime(item.offset / 1000)}
-                                                    </span>
-                                                    {item.text}
+                                      <div className="p-1">
+                                          <Input
+                                            placeholder="Search transcript..."
+                                            value={transcriptQuery}
+                                            onChange={(e) => setTranscriptQuery(e.target.value)}
+                                            className="mb-4"
+                                          />
+                                          <ScrollArea className="h-72 w-full rounded-md border p-4">
+                                              {filteredTranscript.length > 0 ? (
+                                                filteredTranscript.map((item, index) => (
+                                                  <p key={index} className="mb-3 text-sm leading-relaxed">
+                                                      <span className="font-mono text-xs text-muted-foreground mr-3 bg-background p-1 rounded">
+                                                          {formatTime(item.offset / 1000)}
+                                                      </span>
+                                                      {highlightText(item.text, transcriptQuery)}
+                                                  </p>
+                                                ))
+                                              ) : (
+                                                <p className="text-sm text-muted-foreground text-center">
+                                                  No results found for "{transcriptQuery}"
                                                 </p>
-                                            ))}
-                                        </ScrollArea>
+                                              )}
+                                          </ScrollArea>
+                                      </div>
                                     </AccordionContent>
                                 </AccordionItem>
                             </Accordion>
@@ -311,8 +349,8 @@ export default function ClippingPage() {
                                 ) : (
                                      <Card className="text-center p-8">
                                         <h3 className="text-lg font-semibold">AI Could Not Find Suggestions</h3>
-                                        <p className="mt-1 text-sm text-muted-foreground">
-                                            The AI analyzed the transcript but couldn't find any clear clip suggestions. You can still create a clip manually.
+                                        <p className="mt-1 text-sm text-muted-foreground max-w-md mx-auto">
+                                            The AI analyzed the transcript but couldn't find any clear clip suggestions. You can use the searchable transcript above to find your own moments.
                                         </p>
                                     </Card>
                                 )}
@@ -359,11 +397,6 @@ export default function ClippingPage() {
                                 </Button>
                             </div>
                             {error && <p className="text-sm text-destructive mt-2">{error}</p>}
-                             <div className="text-center mt-6">
-                                <Button variant="link" onClick={() => { setAnalysisState('success'); setShowManualForm(true); setVideoInfo(null) }}>
-                                    Or, skip analysis and clip manually
-                                </Button>
-                             </div>
                         </CardContent>
                     </Card>
                 );
