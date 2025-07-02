@@ -322,52 +322,44 @@ export async function findClipsFromTranscript(input: FindViralClipsInput) {
 
 export async function getGeneratedTranscript(youtubeUrl: string) {
   try {
-    // 1. Get video info and find the best audio stream
+    // 1. Get video info and find a suitable audio stream
     const info = await ytdl.getInfo(youtubeUrl);
-    const format = ytdl.chooseFormat(info.formats, {
+    // Prioritize mp4 audio if available, as it's widely compatible
+    let format = ytdl.chooseFormat(info.formats, {
       quality: 'highestaudio',
-      filter: 'audioonly',
+      filter: (f) => f.container === 'mp4' && !!f.audioCodec,
     });
+    
+    // If no mp4 found, take the best available audio-only stream
+    if (!format) {
+        format = ytdl.chooseFormat(info.formats, {
+            quality: 'highestaudio',
+            filter: 'audioonly',
+        });
+    }
 
     if (!format) {
-      return { success: false, error: 'Could not find a compatible audio-only format for this video.' };
+      return { success: false, error: 'Could not find a compatible audio-only stream for this video.' };
     }
     
     const audioStream = ytdl.downloadFromInfo(info, { format });
 
-    // 2. Transcode the audio stream to a compatible format (MP3) on the fly
-    const audioBuffer = await new Promise<Buffer>((resolve, reject) => {
-        const passThrough = new PassThrough();
-        const chunks: Buffer[] = [];
-
-        passThrough.on('data', (chunk) => {
-            chunks.push(chunk);
-        });
-        passThrough.on('end', () => {
-            resolve(Buffer.concat(chunks));
-        });
-        passThrough.on('error', (err) => {
-            reject(new Error(`FFmpeg error during transcription pre-processing: ${err.message}`));
-        });
-        
-        ffmpeg(audioStream)
-            .toFormat('mp3')
-            .on('error', (err) => {
-                // This error is often more informative
-                reject(new Error(`FFmpeg error: ${err.message}. Make sure ffmpeg is installed.`));
-            })
-            .pipe(passThrough, { end: true });
-    });
+    // 2. Download the audio stream directly into a buffer
+    const audioChunks: Buffer[] = [];
+    for await (const chunk of audioStream) {
+        audioChunks.push(chunk);
+    }
+    const audioBuffer = Buffer.concat(audioChunks);
     
     // 3. Create a data URI with the correct MIME type
-    const mimeType = 'audio/mpeg';
+    const mimeType = format.mimeType?.split(';')[0] || 'audio/mp4'; // Default to a common type
     const audioDataUri = `data:${mimeType};base64,${audioBuffer.toString('base64')}`;
     
     // 4. Send to the AI for transcription
     const result = await generateTranscript({ audioDataUri });
 
     if (!result || !result.transcript) {
-        throw new Error("AI failed to generate a transcript.");
+        throw new Error("AI failed to generate a transcript. The model may have been unable to process the audio.");
     }
     
     return { success: true, data: { transcript: result.transcript } };
@@ -378,10 +370,10 @@ export async function getGeneratedTranscript(youtubeUrl: string) {
     
     if (errorMessage.includes('Request payload size exceeds the limit')) {
       errorMessage = 'The video audio is too large for the AI to process. Please try a shorter video.';
-    } else if (errorMessage.includes('Invalid media') || errorMessage.includes('403')) {
-      errorMessage = 'The AI could not process the audio format from this video. Please try a different one.';
+    } else if (errorMessage.includes('Invalid media') || errorMessage.includes('403') || errorMessage.includes('Unable to process')) {
+      errorMessage = 'The AI could not process the audio format from this video. This might be due to a protected video or an unsupported format. Please try a different one.';
     } else if (errorMessage.toLowerCase().includes('ffmpeg')) {
-        errorMessage = `A video processing tool (ffmpeg) is required but could not be run. This is likely a server environment issue. Details: ${errorMessage}`;
+        errorMessage = `A video processing tool (ffmpeg) is required but could not be run. This is a server environment issue that cannot be fixed with code.`;
     }
 
     return { success: false, error: errorMessage };
