@@ -471,3 +471,78 @@ export async function generateAndUploadClip(input: {
     return { success: false, error: errorMessage };
   }
 }
+
+function extractChannelInfoFromUrl(url: string): { id?: string; username?: string } {
+  const channelIdMatch = url.match(/youtube\.com\/channel\/([a-zA-Z0-9_-]+)/);
+  if (channelIdMatch?.[1]) {
+    return { id: channelIdMatch[1] };
+  }
+
+  const usernameMatch = url.match(/youtube\.com\/(?:c\/|user\/)([a-zA-Z0-9_-]+)/);
+  if (usernameMatch?.[1]) {
+    return { username: usernameMatch[1] };
+  }
+  
+  return {};
+}
+
+export async function getChannelVideos(channelUrl: string) {
+  try {
+    const youtube = await getYouTubeClient({ forceRedirect: true });
+    const { id, username } = extractChannelInfoFromUrl(channelUrl);
+
+    if (!id && !username) {
+      return { success: false, error: 'Invalid or unsupported channel URL format. Please use a full URL like ".../channel/UC..." or ".../c/YourUsername".' };
+    }
+
+    const channelResponse = await youtube.channels.list({
+      part: ['contentDetails'],
+      ...(id && { id: [id] }),
+      ...(username && { forUsername: username }),
+    });
+
+    const channel = channelResponse.data.items?.[0];
+    if (!channel?.contentDetails?.relatedPlaylists?.uploads) {
+      return { success: false, error: 'Could not find the specified YouTube channel or its videos.' };
+    }
+
+    const uploadsPlaylistId = channel.contentDetails.relatedPlaylists.uploads;
+
+    const playlistItemsResponse = await youtube.playlistItems.list({
+      part: ['snippet'],
+      playlistId: uploadsPlaylistId,
+      maxResults: 25, // Limiting to 25 to prevent timeouts and long load times.
+    });
+    
+    if (!playlistItemsResponse.data.items) {
+      return { success: true, data: [] }; // Channel exists but has no videos
+    }
+
+    const videos: Video[] = playlistItemsResponse.data.items.map(item => {
+      const snippet = item.snippet!;
+      const videoId = snippet.resourceId?.videoId!;
+      return {
+        id: videoId,
+        title: snippet.title || 'No Title',
+        description: snippet.description || 'No Description',
+        thumbnailUrl: snippet.thumbnails?.high?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        youtubeUrl: `https://www.youtube.com/watch?v=${videoId}`,
+        tags: [], // Tags aren't returned in playlistItems, would require extra API calls.
+        videoUrl: '#',
+      };
+    }).filter(video => video.id); // Filter out any items that might not be videos
+
+    return { success: true, data: videos };
+
+  } catch (error: any) {
+    console.error('Error fetching channel videos:', error);
+    let errorMessage = 'An unknown error occurred.';
+    if (error.message) {
+      errorMessage = error.message;
+    }
+    if (error.message?.includes('NOT_AUTHENTICATED')) {
+        redirect('/login');
+    }
+    return { success: false, error: errorMessage };
+  }
+}

@@ -1,4 +1,4 @@
-import { Youtube, Scissors } from 'lucide-react';
+import { Youtube, Scissors, Copy } from 'lucide-react';
 import Link from 'next/link';
 import UserNav from '@/components/features/UserNav';
 
@@ -21,6 +21,10 @@ const Header = () => {
               <Link href="/clipping" className="flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
                 <Scissors className="h-5 w-5" />
                 <span>Clip</span>
+              </Link>
+               <Link href="/sync" className="flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
+                <Copy className="h-5 w-5" />
+                <span>Sync</span>
               </Link>
             </nav>
           </div>
