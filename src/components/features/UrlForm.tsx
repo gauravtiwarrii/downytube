@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Download, Loader2 } from 'lucide-react';
 import type { Video } from '@/types';
 import { getVideoMetadata } from '@/app/actions';
+import { extractVideoId } from '@/lib/utils';
 
 const FormSchema = z.object({
   url: z.string().url({ message: 'Please enter a valid URL.' }).refine(
@@ -32,12 +33,6 @@ type UrlFormProps = {
   onAddVideo: (video: Video) => void;
   existingIds: string[];
 };
-
-function extractVideoId(url: string): string | null {
-  const regex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
-  const match = url.match(regex);
-  return match ? match[1] : null;
-}
 
 const UrlForm = ({ onAddVideo, existingIds }: UrlFormProps) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -64,9 +59,9 @@ const UrlForm = ({ onAddVideo, existingIds }: UrlFormProps) => {
     
     if (existingIds.includes(videoId)) {
       toast({
-        variant: 'destructive',
-        title: 'Video Already Exists',
-        description: 'This video is already in your download list.',
+        variant: 'default',
+        title: 'Video Already Added',
+        description: 'This video is already in your dashboard.',
       });
       setIsLoading(false);
       return;
@@ -78,13 +73,13 @@ const UrlForm = ({ onAddVideo, existingIds }: UrlFormProps) => {
       onAddVideo(result.data);
       toast({
         title: 'Video Added!',
-        description: 'The video metadata has been fetched and added to your list.',
+        description: 'The video has been fetched and added to your dashboard.',
       });
       form.reset();
     } else {
       toast({
         variant: 'destructive',
-        title: 'Download Failed',
+        title: 'Failed to Add Video',
         description: result.error || 'Could not fetch video metadata.',
       });
     }
@@ -107,12 +102,12 @@ const UrlForm = ({ onAddVideo, existingIds }: UrlFormProps) => {
                   {isLoading ? (
                     <>
                       <Loader2 className="animate-spin" />
-                      Downloading...
+                      Fetching...
                     </>
                   ) : (
                     <>
                       <Download />
-                      Download
+                      Add Video
                     </>
                   )}
                 </Button>

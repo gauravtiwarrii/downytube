@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import type { Video } from '@/types';
-import Header from '@/components/layout/Header';
 import UrlForm from '@/components/features/UrlForm';
 import VideoGrid from '@/components/features/VideoGrid';
 
@@ -49,18 +48,15 @@ export default function Home() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <Header />
-      <main className="flex-grow container mx-auto px-4 py-8">
-        <div className="max-w-3xl mx-auto mb-12">
-          <UrlForm onAddVideo={handleAddVideo} existingIds={videos.map(v => v.id)} />
-        </div>
-        <VideoGrid
-          videos={videos}
-          onDeleteVideo={handleDeleteVideo}
-          onUpdateVideo={handleUpdateVideo}
-        />
-      </main>
+    <div className="container mx-auto px-4 py-8">
+      <div className="max-w-3xl mx-auto mb-12">
+        <UrlForm onAddVideo={handleAddVideo} existingIds={videos.map(v => v.id)} />
+      </div>
+      <VideoGrid
+        videos={videos}
+        onDeleteVideo={handleDeleteVideo}
+        onUpdateVideo={handleUpdateVideo}
+      />
     </div>
   );
 }

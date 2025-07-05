@@ -2,8 +2,14 @@ import { google } from 'googleapis';
 import { cookies } from 'next/headers';
 import { SignJWT, jwtVerify } from 'jose';
 import type { Credentials } from 'google-auth-library';
+import { redirect } from 'next/navigation';
 
-const OAUTH_SCOPES = ['https://www.googleapis.com/auth/youtube.upload', 'https://www.googleapis.com/auth/youtubepartner'];
+const OAUTH_SCOPES = [
+    'https://www.googleapis.com/auth/youtube.upload', 
+    'https://www.googleapis.com/auth/youtubepartner',
+    'https://www.googleapis.com/auth/userinfo.profile',
+    'https://www.googleapis.com/auth/userinfo.email',
+];
 const COOKIE_NAME = 'youtube_auth_token';
 
 // Ensure these are set in your .env file
@@ -69,24 +75,38 @@ export async function getTokensFromCookie(): Promise<Credentials | null> {
   }
 }
 
-export async function getYouTubeClient() {
+export async function checkAuthStatus() {
+  const tokens = await getTokensFromCookie();
+  return !!tokens;
+}
+
+
+export async function getYouTubeClient(options: { forceRedirect?: boolean } = {}) {
   let tokens = await getTokensFromCookie();
   if (!tokens) {
+    if (options.forceRedirect) {
+        redirect('/login');
+    }
     throw new Error('NOT_AUTHENTICATED');
   }
 
   const oauth2Client = getGoogleOAuthClient();
   oauth2Client.setCredentials(tokens);
 
-  const isTokenExpired = !tokens.expiry_date || tokens.expiry_date < Date.now();
+  // Check if the token is expired or about to expire in the next minute
+  const isTokenExpired = !tokens.expiry_date || tokens.expiry_date < (Date.now() + 60000);
   if (isTokenExpired && tokens.refresh_token) {
     try {
       const { credentials } = await oauth2Client.refreshAccessToken();
       oauth2Client.setCredentials(credentials);
-      await setTokensAsCookie(credentials);
+      // Important: combine new credentials with the existing refresh token
+      await setTokensAsCookie({ ...tokens, ...credentials });
     } catch (error) {
       console.error('Failed to refresh access token:', error);
       cookies().delete(COOKIE_NAME);
+       if (options.forceRedirect) {
+        redirect('/login');
+      }
       throw new Error('Could not refresh access token. Please reconnect your YouTube account.');
     }
   }
@@ -95,4 +115,25 @@ export async function getYouTubeClient() {
     version: 'v3',
     auth: oauth2Client,
   });
+}
+
+
+export async function getGoogleUserInfo() {
+    const tokens = await getTokensFromCookie();
+    if (!tokens) return null;
+
+    const oauth2Client = getGoogleOAuthClient();
+    oauth2Client.setCredentials(tokens);
+
+    try {
+        const oauth2 = google.oauth2({
+            auth: oauth2Client,
+            version: 'v2',
+        });
+        const { data } = await oauth2.userinfo.get();
+        return data;
+    } catch (error) {
+        console.error("Error fetching user info:", error);
+        return null;
+    }
 }

@@ -5,18 +5,32 @@ import { rewriteVideoDetails, RewriteVideoDetailsInput } from '@/ai/flows/rewrit
 import { generateThumbnail, GenerateThumbnailInput } from '@/ai/flows/generate-thumbnail';
 import { findViralClips, FindViralClipsInput } from '@/ai/flows/find-viral-clips';
 import { generateTranscript } from '@/ai/flows/generate-transcript';
-import { getYouTubeClient, getTokensFromCookie } from '@/lib/youtube-auth';
-import { formatTime } from '@/lib/utils';
+import { getYouTubeClient, checkAuthStatus as checkAuthStatusFromLib, getGoogleUserInfo } from '@/lib/youtube-auth';
+import { formatTime, extractVideoId } from '@/lib/utils';
 import ytdl from '@distube/ytdl-core';
 import type { Video, TranscriptItem } from '@/types';
 import { PassThrough, Readable } from 'stream';
 import ffmpeg from 'fluent-ffmpeg';
 import { YoutubeTranscript } from 'youtube-transcript';
+import { redirect } from 'next/navigation';
 
 
 export async function checkAuthStatus() {
-  const tokens = await getTokensFromCookie();
-  return !!tokens;
+  return checkAuthStatusFromLib();
+}
+
+export async function getAuthenticatedUser() {
+    try {
+        const user = await getGoogleUserInfo();
+        if (!user || !user.name || !user.email || !user.picture) {
+            return { success: false, error: 'User not found or missing details.' };
+        }
+        return { success: true, data: { name: user.name, email: user.email, picture: user.picture } };
+    } catch(error) {
+        console.error("Error in getAuthenticatedUser action", error);
+        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+        return { success: false, error: errorMessage };
+    }
 }
 
 export async function getOptimizedTags(data: OptimizeYouTubeTagsInput) {
@@ -54,37 +68,39 @@ export async function getGeneratedThumbnail(data: GenerateThumbnailInput) {
 
 export async function getVideoMetadata(url: string) {
   try {
-    if (!ytdl.validateURL(url)) {
+    const youtube = await getYouTubeClient({ forceRedirect: true });
+    const videoId = extractVideoId(url);
+    if (!videoId) {
       return { success: false, error: 'Invalid YouTube URL provided.' };
     }
-    const info = await ytdl.getInfo(url);
 
-    if (!info || !info.videoDetails) {
-      return { success: false, error: 'Could not retrieve video details.' };
+    const response = await youtube.videos.list({
+      part: ['snippet', 'contentDetails'],
+      id: [videoId],
+    });
+
+    if (!response.data.items || response.data.items.length === 0) {
+      return { success: false, error: 'Video not found or access is denied.' };
     }
-
-    const videoDetails = info.videoDetails;
+    const videoDetails = response.data.items[0].snippet;
 
     const newVideo: Video = {
-      id: videoDetails.videoId,
-      title: videoDetails.title || 'No title available',
-      description: videoDetails.description || 'No description available.',
-      thumbnailUrl: `https://i.ytimg.com/vi/${videoDetails.videoId}/hqdefault.jpg`,
-      youtubeUrl: videoDetails.video_url,
-      tags: videoDetails.keywords || [],
+      id: videoId,
+      title: videoDetails?.title || 'No title available',
+      description: videoDetails?.description || 'No description available.',
+      thumbnailUrl: videoDetails?.thumbnails?.high?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+      youtubeUrl: `https://www.youtube.com/watch?v=${videoId}`,
+      tags: videoDetails?.tags || [],
       videoUrl: '#',
     };
 
-    return {
-      success: true,
-      data: newVideo,
-    };
+    return { success: true, data: newVideo };
   } catch (error) {
     console.error('Error fetching video metadata:', error);
-    const errorMessage =
-      error instanceof Error
-        ? error.message
-        : 'An unknown error occurred while fetching video metadata.';
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred while fetching video metadata.';
+    if (errorMessage.includes('NOT_AUTHENTICATED')) {
+        redirect('/login');
+    }
     return { success: false, error: errorMessage };
   }
 }
@@ -147,7 +163,7 @@ function dataUriToReadableStream(dataUri: string): Readable {
 
 export async function uploadToYouTube(video: Video) {
   try {
-    const youtube = await getYouTubeClient();
+    const youtube = await getYouTubeClient({ forceRedirect: true });
 
     const ytdlStream = ytdl(video.youtubeUrl, {
       filter: 'videoandaudio',
@@ -229,6 +245,9 @@ export async function uploadToYouTube(video: Video) {
             errorMessage = error.message;
         }
     }
+    if (errorMessage.includes('NOT_AUTHENTICATED')) {
+        redirect('/login');
+    }
     return { success: false, error: errorMessage };
   }
 }
@@ -246,30 +265,11 @@ const timeStringToSeconds = (time: string): number => {
 
 export async function analyzeVideoForClips(url: string) {
   let video: Video;
-  try {
-    if (!ytdl.validateURL(url)) {
-      return { success: false, error: 'Invalid YouTube URL provided.' };
-    }
-
-    const info = await ytdl.getInfo(url);
-    if (!info || !info.videoDetails) {
-      return { success: false, error: 'Could not retrieve video details.' };
-    }
-    const videoDetails = info.videoDetails;
-    video = {
-      id: videoDetails.videoId,
-      title: videoDetails.title || 'No title available',
-      description: videoDetails.description || 'No description available.',
-      thumbnailUrl: `https://i.ytimg.com/vi/${videoDetails.videoId}/hqdefault.jpg`,
-      youtubeUrl: videoDetails.video_url,
-      tags: videoDetails.keywords || [],
-      videoUrl: '#',
-    };
-  } catch (e) {
-    console.error('Error fetching video info in analyzeVideoForClips:', e);
-    const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred during video analysis.';
-    return { success: false, error: errorMessage };
+  const metadataResult = await getVideoMetadata(url);
+  if (!metadataResult.success || !metadataResult.data) {
+      return { success: false, error: metadataResult.error || 'Failed to get video metadata.'};
   }
+  video = metadataResult.data;
 
   try {
     const transcript = await YoutubeTranscript.fetchTranscript(url);
@@ -388,7 +388,7 @@ export async function generateAndUploadClip(input: {
   description: string;
 }) {
   try {
-    const youtube = await getYouTubeClient();
+    const youtube = await getYouTubeClient({ forceRedirect: true });
 
     const ytdlStream = ytdl(input.youtubeUrl, {
       quality: 'highest',
@@ -464,6 +464,9 @@ export async function generateAndUploadClip(input: {
         } else {
             errorMessage = error.message;
         }
+    }
+    if (errorMessage.includes('NOT_AUTHENTICATED')) {
+        redirect('/login');
     }
     return { success: false, error: errorMessage };
   }

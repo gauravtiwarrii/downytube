@@ -1,6 +1,6 @@
 import { Youtube, Scissors } from 'lucide-react';
 import Link from 'next/link';
-import AuthConnect from '@/components/features/AuthConnect';
+import UserNav from '@/components/features/UserNav';
 
 const Header = () => {
   return (
@@ -14,14 +14,17 @@ const Header = () => {
                 DownyTube
               </h1>
             </Link>
-            <nav>
+            <nav className="hidden md:flex items-center space-x-4">
+               <Link href="/" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
+                Dashboard
+              </Link>
               <Link href="/clipping" className="flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
                 <Scissors className="h-5 w-5" />
                 <span>Clip</span>
               </Link>
             </nav>
           </div>
-          <AuthConnect />
+          <UserNav />
         </div>
       </div>
     </header>

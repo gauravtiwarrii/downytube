@@ -11,7 +11,7 @@ export async function GET() {
     // Even if cookie deletion fails, we can still try to redirect
   }
   
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002';
-  // Redirect to the home page. The page will reload and auth status will be updated.
-  return NextResponse.redirect(baseUrl);
+  const loginUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/login`;
+  // Redirect to the login page.
+  return NextResponse.redirect(loginUrl);
 }
