@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { getChannelVideos, uploadToYouTube } from '@/app/actions';
-import { Loader2, Copy, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
+import { Loader2, Copy, CheckCircle, RefreshCw } from 'lucide-react';
 import type { Video } from '@/types';
 import Image from 'next/image';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';

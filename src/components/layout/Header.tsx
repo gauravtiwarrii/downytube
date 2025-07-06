@@ -19,11 +19,11 @@ const Header = () => {
                 Dashboard
               </Link>
               <Link href="/clipping" className="flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
-                <Scissors className="h-5 w-5" />
+                <Scissors className="h-4 w-4" />
                 <span>Clip</span>
               </Link>
                <Link href="/sync" className="flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
-                <Copy className="h-5 w-5" />
+                <Copy className="h-4 w-4" />
                 <span>Sync</span>
               </Link>
             </nav>

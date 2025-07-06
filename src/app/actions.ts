@@ -472,33 +472,40 @@ export async function generateAndUploadClip(input: {
   }
 }
 
-function extractChannelInfoFromUrl(url: string): { id?: string; username?: string } {
-  const channelIdMatch = url.match(/youtube\.com\/channel\/([a-zA-Z0-9_-]+)/);
-  if (channelIdMatch?.[1]) {
-    return { id: channelIdMatch[1] };
-  }
-
-  const usernameMatch = url.match(/youtube\.com\/(?:c\/|user\/)([a-zA-Z0-9_-]+)/);
-  if (usernameMatch?.[1]) {
-    return { username: usernameMatch[1] };
-  }
-  
-  return {};
+function extractChannelInfoFromUrl(url: string): { id?: string; username?: string; handle?: string } {
+    if (!url) return {};
+    // Match /channel/UC...
+    const channelIdMatch = url.match(/youtube\.com\/channel\/([a-zA-Z0-9_-]+)/);
+    if (channelIdMatch?.[1]) {
+        return { id: channelIdMatch[1] };
+    }
+    // Match /c/Username or /user/Username
+    const usernameMatch = url.match(/youtube\.com\/(?:c\/|user\/)([a-zA-Z0-9_-]+)/);
+    if (usernameMatch?.[1]) {
+        return { username: usernameMatch[1] };
+    }
+    // Match /@Handle
+    const handleMatch = url.match(/youtube\.com\/@([a-zA-Z0-9_.-]+)/);
+    if (handleMatch?.[1]) {
+        return { handle: `@${handleMatch[1]}` };
+    }
+    return {};
 }
 
 export async function getChannelVideos(channelUrl: string) {
   try {
     const youtube = await getYouTubeClient({ forceRedirect: true });
-    const { id, username } = extractChannelInfoFromUrl(channelUrl);
+    const { id, username, handle } = extractChannelInfoFromUrl(channelUrl);
 
-    if (!id && !username) {
-      return { success: false, error: 'Invalid or unsupported channel URL format. Please use a full URL like ".../channel/UC..." or ".../c/YourUsername".' };
+    if (!id && !username && !handle) {
+      return { success: false, error: 'Invalid or unsupported channel URL format. Please use a full channel URL.' };
     }
 
     const channelResponse = await youtube.channels.list({
       part: ['contentDetails'],
       ...(id && { id: [id] }),
       ...(username && { forUsername: username }),
+      ...(handle && { forHandle: handle }),
     });
 
     const channel = channelResponse.data.items?.[0];
@@ -538,7 +545,11 @@ export async function getChannelVideos(channelUrl: string) {
     console.error('Error fetching channel videos:', error);
     let errorMessage = 'An unknown error occurred.';
     if (error.message) {
-      errorMessage = error.message;
+      if (error.message.includes('noLinkedYouTubeAccount')) {
+        errorMessage = 'The provided channel URL does not seem to be associated with a valid YouTube channel.';
+      } else {
+        errorMessage = error.message;
+      }
     }
     if (error.message?.includes('NOT_AUTHENTICATED')) {
         redirect('/login');
