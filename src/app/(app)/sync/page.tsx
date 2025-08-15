@@ -1,15 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { getChannelVideos, uploadToYouTube } from '@/app/actions';
-import { Loader2, Copy, CheckCircle, RefreshCw } from 'lucide-react';
+import { Loader2, Copy, CheckCircle, RefreshCw, XCircle, Trash2, StopCircle, Repeat } from 'lucide-react';
 import type { Video } from '@/types';
 import Image from 'next/image';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Progress } from '@/components/ui/progress';
+
 
 type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
 
@@ -17,15 +19,20 @@ export default function SyncPage() {
     const [channelUrl, setChannelUrl] = useState('');
     const [videos, setVideos] = useState<Video[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [isSyncingAll, setIsSyncingAll] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [syncStatuses, setSyncStatuses] = useState<Record<string, SyncStatus>>({});
+    const [syncProgress, setSyncProgress] = useState(0);
     const { toast } = useToast();
+    
+    const stopSyncingRef = useRef(false);
 
     const handleFetchVideos = async () => {
         setIsLoading(true);
         setError(null);
         setVideos([]);
         setSyncStatuses({});
+        setSyncProgress(0);
 
         const result = await getChannelVideos(channelUrl);
         setIsLoading(false);
@@ -41,27 +48,71 @@ export default function SyncPage() {
         }
     };
     
-    const handleSyncVideo = async (video: Video) => {
+    const handleSyncVideo = useCallback(async (video: Video) => {
         setSyncStatuses(prev => ({ ...prev, [video.id]: 'syncing' }));
         toast({ title: 'Sync started...', description: `Uploading "${video.title}" to your channel.`});
 
-        const result = await uploadToYouTube(video);
+        try {
+            const result = await uploadToYouTube(video);
 
-        if (result.success && result.data?.youtubeUrl) {
-            setSyncStatuses(prev => ({ ...prev, [video.id]: 'synced' }));
-            toast({ 
-                title: 'Sync Complete!', 
-                description: `"${video.title}" has been uploaded to your channel.`,
-                action: (
-                  <a href={result.data.youtubeUrl} target="_blank" rel="noopener noreferrer">
-                    <Button variant="outline" size="sm">View Video</Button>
-                  </a>
-                )
-            });
-        } else {
-            setSyncStatuses(prev => ({ ...prev, [video.id]: 'error' }));
-            toast({ variant: 'destructive', title: 'Sync Failed', description: result.error, duration: 9000 });
+            if (result.success && result.data?.youtubeUrl) {
+                setSyncStatuses(prev => ({ ...prev, [video.id]: 'synced' }));
+                toast({ 
+                    title: 'Sync Complete!', 
+                    description: `"${video.title}" has been uploaded to your channel.`,
+                    action: (
+                      <a href={result.data.youtubeUrl} target="_blank" rel="noopener noreferrer">
+                        <Button variant="outline" size="sm">View Video</Button>
+                      </a>
+                    )
+                });
+                return true;
+            } else {
+                setSyncStatuses(prev => ({ ...prev, [video.id]: 'error' }));
+                toast({ variant: 'destructive', title: 'Sync Failed', description: result.error, duration: 9000 });
+                return false;
+            }
+        } catch (e: any) {
+             setSyncStatuses(prev => ({ ...prev, [video.id]: 'error' }));
+             toast({ variant: 'destructive', title: 'Sync Failed', description: e.message, duration: 9000 });
+             return false;
         }
+    }, [toast]);
+    
+    const handleSyncAll = async () => {
+        setIsSyncingAll(true);
+        stopSyncingRef.current = false;
+        setSyncProgress(0);
+        const videosToSync = videos.filter(v => syncStatuses[v.id] !== 'synced');
+        
+        for (let i = 0; i < videosToSync.length; i++) {
+            if (stopSyncingRef.current) {
+                toast({ title: 'Sync Stopped', description: 'The bulk sync operation was cancelled.' });
+                break;
+            }
+            const video = videosToSync[i];
+            await handleSyncVideo(video);
+            setSyncProgress(((i + 1) / videosToSync.length) * 100);
+        }
+
+        setIsSyncingAll(false);
+        stopSyncingRef.current = false;
+    };
+    
+    const stopSyncing = () => {
+        stopSyncingRef.current = true;
+    };
+
+    const clearSynced = () => {
+        const newStatuses = { ...syncStatuses };
+        Object.keys(newStatuses).forEach(key => {
+            if (newStatuses[key] === 'synced') {
+                delete newStatuses[key];
+            }
+        });
+        setSyncStatuses(newStatuses);
+        setVideos(prev => prev.filter(v => syncStatuses[v.id] !== 'synced'));
+        toast({ title: 'Cleared Synced Items' });
     };
 
     const getSyncButton = (video: Video) => {
@@ -75,7 +126,7 @@ export default function SyncPage() {
                 return <Button className="w-full" variant="destructive" onClick={() => handleSyncVideo(video)}><RefreshCw /> Retry Sync</Button>;
             case 'idle':
             default:
-                return <Button className="w-full" onClick={() => handleSyncVideo(video)}><Copy /> Sync to My Channel</Button>;
+                return <Button className="w-full" onClick={() => handleSyncVideo(video)} disabled={isSyncingAll}><Copy /> Sync to My Channel</Button>;
         }
     };
 
@@ -101,10 +152,10 @@ export default function SyncPage() {
                                 value={channelUrl}
                                 onChange={(e) => setChannelUrl(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleFetchVideos()}
-                                disabled={isLoading}
+                                disabled={isLoading || isSyncingAll}
                                 className="text-base"
                             />
-                            <Button onClick={handleFetchVideos} disabled={!channelUrl || isLoading} className="w-full sm:w-auto">
+                            <Button onClick={handleFetchVideos} disabled={!channelUrl || isLoading || isSyncingAll} className="w-full sm:w-auto">
                                 {isLoading ? <Loader2 className="animate-spin" /> : 'Fetch Videos'}
                             </Button>
                         </div>
@@ -115,7 +166,7 @@ export default function SyncPage() {
                 {videos.length > 0 && (
                      <Card>
                         <CardHeader>
-                            <div className="flex justify-between items-center">
+                            <div className="flex flex-wrap justify-between items-center gap-4">
                                 <div>
                                     <CardTitle>Fetched Videos</CardTitle>
                                     <CardDescription>Found {videos.length} videos. Click sync to upload them to your channel.</CardDescription>
@@ -131,9 +182,28 @@ export default function SyncPage() {
                                         <SelectItem value="weekly" disabled>Weekly (soon)</SelectItem>
                                       </SelectContent>
                                     </Select>
-                                    <p className="text-xs text-muted-foreground mt-2 text-right">Automatic scheduling is planned.</p>
                                 </div>
                             </div>
+                             <div className="flex flex-wrap gap-2 pt-4 border-t mt-4">
+                                {isSyncingAll ? (
+                                    <Button variant="destructive" onClick={stopSyncing}>
+                                        <StopCircle /> Stop Sync
+                                    </Button>
+                                ) : (
+                                    <Button onClick={handleSyncAll} disabled={isLoading}>
+                                        <Repeat /> Sync All
+                                    </Button>
+                                )}
+                                <Button variant="outline" onClick={clearSynced} disabled={isSyncingAll}>
+                                    <Trash2 /> Clear Synced
+                                </Button>
+                            </div>
+                            {isSyncingAll && (
+                                <div className="pt-4 space-y-2">
+                                    <Progress value={syncProgress} />
+                                    <p className="text-sm text-muted-foreground">Syncing... {Math.round(syncProgress)}% complete.</p>
+                                </div>
+                            )}
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-4">
