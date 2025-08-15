@@ -15,11 +15,28 @@ const COOKIE_NAME = 'youtube_auth_token';
 // Ensure these are set in your .env file
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const NEXT_PUBLIC_BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 const AUTH_SECRET = process.env.AUTH_SECRET;
 
-if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !NEXT_PUBLIC_BASE_URL || !AUTH_SECRET) {
-  throw new Error('Missing Google OAuth credentials, base URL, or AUTH_SECRET in environment variables.');
+// Determine the base URL dynamically
+const getBaseUrl = () => {
+    if (process.env.NEXT_PUBLIC_BASE_URL) {
+        return process.env.NEXT_PUBLIC_BASE_URL;
+    }
+    // VERCEL_URL is provided by Vercel, but this logic also works for Netlify's DEPLOY_PRIME_URL
+    if (process.env.VERCEL_URL) {
+        return `https://${process.env.VERCEL_URL}`;
+    }
+    if (process.env.DEPLOY_PRIME_URL) {
+        return process.env.DEPLOY_PRIME_URL;
+    }
+    return 'http://localhost:9002';
+};
+
+const NEXT_PUBLIC_BASE_URL = getBaseUrl();
+
+
+if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !AUTH_SECRET) {
+  throw new Error('Missing Google OAuth credentials or AUTH_SECRET in environment variables.');
 }
 
 const secretKey = new TextEncoder().encode(AUTH_SECRET);
