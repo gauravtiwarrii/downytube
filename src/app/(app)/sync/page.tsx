@@ -69,12 +69,12 @@ export default function SyncPage() {
                 return true;
             } else {
                 setSyncStatuses(prev => ({ ...prev, [video.id]: 'error' }));
-                toast({ variant: 'destructive', title: 'Sync Failed', description: result.error, duration: 9000 });
+                toast({ variant: 'destructive', title: 'Sync Failed', description: result.error || 'An unknown error occurred during upload.', duration: 9000 });
                 return false;
             }
         } catch (e: any) {
              setSyncStatuses(prev => ({ ...prev, [video.id]: 'error' }));
-             toast({ variant: 'destructive', title: 'Sync Failed', description: e.message, duration: 9000 });
+             toast({ variant: 'destructive', title: 'Sync Failed', description: e.message || 'An unexpected error occurred.', duration: 9000 });
              return false;
         }
     }, [toast]);
