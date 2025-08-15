@@ -272,10 +272,14 @@ export async function uploadToYouTube(video: Video) {
     });
 
     return { success: true, data: { videoId: videoId, youtubeUrl: `https://www.youtube.com/watch?v=${videoId}` } };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error uploading to YouTube:', error);
     let errorMessage = 'An unknown error occurred during upload.';
-    if (error instanceof Error) {
+    
+    // Check for quota exceeded error specifically
+    if (error?.errors?.some((e: any) => e.reason === 'quotaExceeded')) {
+        errorMessage = 'You have exceeded the daily YouTube API quota. Please try again tomorrow or request a quota increase from Google.';
+    } else if (error instanceof Error) {
         if (error.message.includes('NOT_AUTHENTICATED')) {
             errorMessage = 'You are not connected to a YouTube account. Please connect your account first.'
         } else {
@@ -500,10 +504,13 @@ export async function generateAndUploadClip(input: {
             youtubeUrl: `https://www.youtube.com/watch?v=${videoId}` 
         } 
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error generating or uploading clip:', error);
     let errorMessage = 'An unknown error occurred during the process.';
-    if (error instanceof Error) {
+
+    if (error?.errors?.some((e: any) => e.reason === 'quotaExceeded')) {
+        errorMessage = 'You have exceeded the daily YouTube API quota. Please try again tomorrow or request a quota increase from Google.';
+    } else if (error instanceof Error) {
         if (error.message.includes('NOT_AUTHENTICATED')) {
             errorMessage = 'You are not connected to a YouTube account. Please connect your account first.'
         } else {

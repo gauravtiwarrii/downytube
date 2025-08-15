@@ -209,7 +209,7 @@ export default function SyncPage() {
                             <div className="space-y-4">
                                 {videos.map(video => (
                                     <div key={video.id} className="flex flex-col sm:flex-row items-center gap-4 p-4 border rounded-lg">
-                                        <div className="relative w-full sm:w-32 aspect-video flex-shrink-0 rounded-md overflow-hidden">
+                                        <div className="relative w-full sm:w-32 aspect-video flex-shrink-0 rounded-md overflow-hidden bg-muted">
                                             <Image src={video.thumbnailUrl} alt={video.title} layout="fill" objectFit="cover" />
                                         </div>
                                         <div className="flex-grow">
