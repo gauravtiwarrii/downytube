@@ -1,3 +1,4 @@
+
 import { google } from 'googleapis';
 import { cookies } from 'next/headers';
 import { SignJWT, jwtVerify } from 'jose';
@@ -118,13 +119,13 @@ export async function getYouTubeClient(options: { forceRedirect?: boolean } = {}
       oauth2Client.setCredentials(credentials);
       // Important: combine new credentials with the existing refresh token
       await setTokensAsCookie({ ...tokens, ...credentials });
-    } catch (error) {
-      console.error('Failed to refresh access token:', error);
+    } catch (error: any) {
+      console.error('Failed to refresh access token. Full error:', JSON.stringify(error, null, 2));
       cookies().delete(COOKIE_NAME);
        if (options.forceRedirect) {
         redirect('/login');
       }
-      throw new Error('Could not refresh access token. Please reconnect your YouTube account.');
+      throw new Error(`Could not refresh access token. Please reconnect your YouTube account. Details: ${error.message}`);
     }
   }
 
