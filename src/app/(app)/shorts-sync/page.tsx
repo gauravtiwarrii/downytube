@@ -122,7 +122,7 @@ export default function ShortsSyncPage() {
         const status = syncStatuses[video.id] || 'idle';
         switch (status) {
             case 'syncing':
-                return <Button className="w-full" disabled><Loader2 className="animate-spin" /> Syncing...</Button>;
+                return <Button className="w-full" disabled><Loader2 /> Syncing...</Button>;
             case 'synced':
                 return <Button className="w-full" disabled variant="secondary"><CheckCircle /> Synced</Button>;
             case 'error':
@@ -195,11 +195,11 @@ export default function ShortsSyncPage() {
                         <CardContent>
                             <div className="space-y-4">
                                 {shorts.map(video => (
-                                    <div key={video.id} className="flex flex-col sm:flex-row items-center gap-4 p-4 border rounded-lg">
+                                    <div key={video.id} className="flex flex-col sm:flex-row items-start gap-4 p-4 border rounded-lg">
                                         <div className="relative w-full sm:w-24 aspect-[9/16] flex-shrink-0 rounded-md overflow-hidden bg-muted">
                                             <Image src={video.thumbnailUrl} alt={video.title} layout="fill" objectFit="cover" />
                                         </div>
-                                        <div className="flex-grow">
+                                        <div className="flex-grow pt-1">
                                             <p className="font-semibold line-clamp-2">{video.title}</p>
                                         </div>
                                         <div className="w-full sm:w-48 flex-shrink-0">
