@@ -19,9 +19,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Sparkles, Info, Download, Pencil, Copy, Image as ImageIcon, Upload, ExternalLink, LogIn, MessageSquareQuote } from 'lucide-react';
+import { Loader2, Sparkles, Info, Download, Pencil, Copy, Image as ImageIcon, Upload, ExternalLink, LogIn, MessageSquareQuote, TestTube2, Star } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getOptimizedTags, getDownloadUrl, getRewrittenDetails, getGeneratedThumbnail, uploadToYouTube, checkAuthStatus, getSocialPost } from '@/app/actions';
+import { getOptimizedTags, getDownloadUrl, getRewrittenDetails, getGeneratedThumbnail, uploadToYouTube, checkAuthStatus, getSocialPost, getABTestIdeas } from '@/app/actions';
 import type { Video } from '@/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
@@ -30,6 +30,18 @@ type VideoDetailsModalProps = {
   onUpdateVideo: (id: string, updates: Partial<Video>) => void;
 };
 
+type TitleVariation = {
+    title: string;
+    reasoning: string;
+    confidenceScore: number;
+}
+
+type ThumbnailVariation = {
+    prompt: string;
+    reasoning: string;
+    confidenceScore: number;
+}
+
 const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => {
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [isRewriting, setIsRewriting] = useState(false);
@@ -37,12 +49,16 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isGeneratingPost, setIsGeneratingPost] = useState(false);
+  const [isGeneratingABTests, setIsGeneratingABTests] = useState(false);
   const [open, setOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [watermark, setWatermark] = useState(video.watermarkText || '');
   const [thumbnailPrompt, setThumbnailPrompt] = useState(video.thumbnailPrompt || '');
   const [socialPlatform, setSocialPlatform] = useState<'Twitter' | 'LinkedIn'>('Twitter');
   const [generatedPost, setGeneratedPost] = useState('');
+  const [titleVariations, setTitleVariations] = useState<TitleVariation[]>([]);
+  const [thumbnailVariations, setThumbnailVariations] = useState<ThumbnailVariation[]>([]);
+
 
   const { toast } = useToast();
 
@@ -185,6 +201,33 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
     }
   }
 
+  const handleGenerateABTests = async () => {
+    setIsGeneratingABTests(true);
+    setTitleVariations([]);
+    setThumbnailVariations([]);
+
+    const result = await getABTestIdeas({
+        title: video.title,
+        description: video.description,
+    });
+    setIsGeneratingABTests(false);
+
+    if (result.success && result.data) {
+        setTitleVariations(result.data.titleVariations);
+        setThumbnailVariations(result.data.thumbnailVariations);
+        toast({
+            title: 'A/B Test Ideas Generated!',
+            description: 'AI has created some alternatives for you to test.',
+        });
+    } else {
+        toast({
+            variant: 'destructive',
+            title: 'Generation Failed',
+            description: result.error || 'An unknown error occurred.',
+        });
+    }
+  }
+
   const handleDownloadVideo = async () => {
     setIsDownloading(true);
     const result = await getDownloadUrl(video.youtubeUrl);
@@ -287,10 +330,20 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
     }
   };
 
+  const applyTitle = (newTitle: string) => {
+    onUpdateVideo(video.id, { rewrittenTitle: newTitle });
+    toast({ title: "Title Applied!", description: "The new title has been set."});
+  }
+
+  const applyThumbnailPrompt = (newPrompt: string) => {
+    setThumbnailPrompt(newPrompt);
+    toast({ title: "Thumbnail Idea Applied!", description: "The prompt has been copied to the generator."});
+  }
+
 
   const currentTitle = video.rewrittenTitle || video.title;
   const currentDescription = video.rewrittenDescription || video.description;
-  const isAiBusy = isRewriting || isOptimizing || isGeneratingThumbnail || isUploading || isGeneratingPost;
+  const isAiBusy = isRewriting || isOptimizing || isGeneratingThumbnail || isUploading || isGeneratingPost || isGeneratingABTests;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -364,13 +417,72 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
                 </div>
               </AccordionContent>
             </AccordionItem>
+            <AccordionItem value="ab-testing">
+                <AccordionTrigger>
+                  <div className="flex items-center gap-2">
+                    <TestTube2 className="text-primary" />
+                    <span>A/B Test Ideas</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                    <div className="space-y-4">
+                        <p className="text-sm text-muted-foreground">
+                            Generate multiple title and thumbnail concepts to find the best-performing combination.
+                        </p>
+                        <Button className="w-full" onClick={handleGenerateABTests} disabled={isAiBusy}>
+                            {isGeneratingABTests ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                            Generate A/B Test Ideas
+                        </Button>
+                        
+                        {titleVariations.length > 0 && (
+                            <div className="space-y-3">
+                                <h4 className="font-semibold">Title Variations</h4>
+                                {titleVariations.map((item, index) => (
+                                    <div key={index} className="p-3 border rounded-md bg-background/50">
+                                        <div className="flex justify-between items-start">
+                                            <p className="font-medium pr-4">{item.title}</p>
+                                            <div className="flex items-center gap-4">
+                                                <Badge variant="secondary" className="flex items-center gap-1.5 text-amber-500 border-amber-500/50">
+                                                    <Star className="h-3 w-3" /> {item.confidenceScore}/10
+                                                </Badge>
+                                                <Button size="sm" variant="outline" onClick={() => applyTitle(item.title)}>Apply</Button>
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground mt-2 italic">"{item.reasoning}"</p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        
+                        {thumbnailVariations.length > 0 && (
+                             <div className="space-y-3">
+                                <h4 className="font-semibold">Thumbnail Concept Variations</h4>
+                                {thumbnailVariations.map((item, index) => (
+                                    <div key={index} className="p-3 border rounded-md bg-background/50">
+                                        <div className="flex justify-between items-start">
+                                            <p className="text-sm text-muted-foreground pr-4">{item.prompt}</p>
+                                             <div className="flex items-center gap-4 pl-4">
+                                                <Badge variant="secondary" className="flex items-center gap-1.5 text-amber-500 border-amber-500/50">
+                                                    <Star className="h-3 w-3" /> {item.confidenceScore}/10
+                                                </Badge>
+                                                <Button size="sm" variant="outline" onClick={() => applyThumbnailPrompt(item.prompt)}>Use</Button>
+                                            </div>
+                                        </div>
+                                         <p className="text-xs text-muted-foreground mt-2 italic">"{item.reasoning}"</p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </AccordionContent>
+            </AccordionItem>
           </Accordion>
 
           <div className="rounded-lg border bg-card/50 p-4 space-y-4">
             <div>
                 <h4 className="font-semibold text-foreground">AI Thumbnail Generator</h4>
                 <p className="text-sm text-muted-foreground">
-                    Describe your ideal thumbnail and let the AI create it.
+                    Describe your ideal thumbnail and let the AI create it, or use an idea from the A/B test generator.
                 </p>
             </div>
             <Textarea
@@ -616,5 +728,3 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
 };
 
 export default VideoDetailsModal;
-
-    

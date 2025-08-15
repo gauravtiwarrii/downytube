@@ -7,6 +7,7 @@ import { findViralClips, FindViralClipsInput } from '@/ai/flows/find-viral-clips
 import { generateTranscript } from '@/ai/flows/generate-transcript';
 import { generateSocialPost, GenerateSocialPostInput } from '@/ai/flows/generate-social-post';
 import { generateViralIdeas, GenerateViralIdeasInput } from '@/ai/flows/generate-viral-ideas';
+import { generateABTests, GenerateABTestsInput } from '@/ai/flows/generate-ab-tests';
 import { getYouTubeClient, checkAuthStatus as checkAuthStatusFromLib, getGoogleUserInfo } from '@/lib/youtube-auth';
 import { formatTime, extractVideoId, parseISO8601Duration } from '@/lib/utils';
 import ytdl from '@distube/ytdl-core';
@@ -90,6 +91,16 @@ export async function getViralIdeas(data: GenerateViralIdeasInput) {
   }
 }
 
+export async function getABTestIdeas(data: GenerateABTestsInput) {
+  try {
+    const result = await generateABTests(data);
+    return { success: true, data: result };
+  } catch (error) {
+    console.error('Error generating A/B test ideas:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+    return { success: false, error: errorMessage };
+  }
+}
 
 export async function getVideoMetadata(url: string) {
   try {
@@ -678,5 +689,3 @@ export async function getChannelShorts(channelUrl: string) {
     return { success: false, error: errorMessage };
   }
 }
-
-    
