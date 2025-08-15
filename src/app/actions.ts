@@ -6,7 +6,7 @@ import { generateThumbnail, GenerateThumbnailInput } from '@/ai/flows/generate-t
 import { findViralClips, FindViralClipsInput } from '@/ai/flows/find-viral-clips';
 import { generateTranscript } from '@/ai/flows/generate-transcript';
 import { getYouTubeClient, checkAuthStatus as checkAuthStatusFromLib, getGoogleUserInfo } from '@/lib/youtube-auth';
-import { formatTime, extractVideoId } from '@/lib/utils';
+import { formatTime, extractVideoId, parseISO8601Duration } from '@/lib/utils';
 import ytdl from '@distube/ytdl-core';
 import type { Video, TranscriptItem } from '@/types';
 import { PassThrough, Readable } from 'stream';
@@ -168,6 +168,7 @@ export async function uploadToYouTube(video: Video) {
     const ytdlStream = ytdl(video.youtubeUrl, {
       filter: 'videoandaudio',
       quality: 'highest',
+      dlChunkSize: 0,
     });
 
     let streamToUpload: Readable = ytdlStream;
@@ -274,7 +275,16 @@ export async function analyzeVideoForClips(url: string) {
   try {
     const transcript = await YoutubeTranscript.fetchTranscript(url);
     if (!transcript || transcript.length === 0) {
-      throw new Error('Transcript not found or is empty');
+      // This is not a fatal error, we will just prompt for AI transcription.
+      return {
+        success: true,
+        data: {
+          video,
+          transcript: [],
+          suggestions: [],
+          transcriptError: 'NEEDS_GENERATION',
+        },
+      };
     }
 
     const suggestionsResult = await findClipsFromTranscript({
@@ -322,40 +332,33 @@ export async function findClipsFromTranscript(input: FindViralClipsInput) {
 
 export async function getGeneratedTranscript(youtubeUrl: string) {
   try {
-    // 1. Get video info and find a suitable audio stream
     const info = await ytdl.getInfo(youtubeUrl);
-    // Prioritize mp4 audio if available, as it's widely compatible
-    let format = ytdl.chooseFormat(info.formats, {
+    const format = ytdl.chooseFormat(info.formats, {
       quality: 'highestaudio',
-      filter: (f) => f.container === 'mp4' && !!f.audioCodec,
+      filter: 'audioonly',
     });
-    
-    // If no mp4 found, take the best available audio-only stream
-    if (!format) {
-        format = ytdl.chooseFormat(info.formats, {
-            quality: 'highestaudio',
-            filter: 'audioonly',
-        });
-    }
 
     if (!format) {
       return { success: false, error: 'Could not find a compatible audio-only stream for this video.' };
     }
     
-    const audioStream = ytdl.downloadFromInfo(info, { format });
-
-    // 2. Download the audio stream directly into a buffer
+    // Download the audio stream directly into a buffer
+    const audioStream = ytdl(youtubeUrl, { format: format, dlChunkSize: 0 });
+    
     const audioChunks: Buffer[] = [];
     for await (const chunk of audioStream) {
         audioChunks.push(chunk);
     }
     const audioBuffer = Buffer.concat(audioChunks);
+
+    if (audioBuffer.length === 0) {
+      return { success: false, error: 'Downloaded audio was empty. The video may be protected or unavailable.' };
+    }
     
-    // 3. Create a data URI with the correct MIME type
-    const mimeType = format.mimeType?.split(';')[0] || 'audio/mp4'; // Default to a common type
+    const mimeType = format.mimeType?.split(';')[0] || 'audio/mp4';
     const audioDataUri = `data:${mimeType};base64,${audioBuffer.toString('base64')}`;
     
-    // 4. Send to the AI for transcription
+    // Send to the AI for transcription
     const result = await generateTranscript({ audioDataUri });
 
     if (!result || !result.transcript) {
@@ -392,6 +395,7 @@ export async function generateAndUploadClip(input: {
 
     const ytdlStream = ytdl(input.youtubeUrl, {
       quality: 'highest',
+      dlChunkSize: 0,
     });
     
     const passThrough = new PassThrough();
@@ -543,6 +547,93 @@ export async function getChannelVideos(channelUrl: string) {
 
   } catch (error: any) {
     console.error('Error fetching channel videos:', error);
+    let errorMessage = 'An unknown error occurred.';
+    if (error.message) {
+      if (error.message.includes('noLinkedYouTubeAccount')) {
+        errorMessage = 'The provided channel URL does not seem to be associated with a valid YouTube channel.';
+      } else {
+        errorMessage = error.message;
+      }
+    }
+    if (error.message?.includes('NOT_AUTHENTICATED')) {
+        redirect('/login');
+    }
+    return { success: false, error: errorMessage };
+  }
+}
+
+export async function getChannelShorts(channelUrl: string) {
+  try {
+    const youtube = await getYouTubeClient({ forceRedirect: true });
+    const { id, username, handle } = extractChannelInfoFromUrl(channelUrl);
+
+    if (!id && !username && !handle) {
+      return { success: false, error: 'Invalid or unsupported channel URL format. Please use a full channel URL.' };
+    }
+
+    const channelResponse = await youtube.channels.list({
+      part: ['contentDetails'],
+      ...(id && { id: [id] }),
+      ...(username && { forUsername: username }),
+      ...(handle && { forHandle: handle }),
+    });
+
+    const channel = channelResponse.data.items?.[0];
+    if (!channel?.contentDetails?.relatedPlaylists?.uploads) {
+      return { success: false, error: 'Could not find the specified YouTube channel or its videos.' };
+    }
+
+    const uploadsPlaylistId = channel.contentDetails.relatedPlaylists.uploads;
+
+    const playlistItemsResponse = await youtube.playlistItems.list({
+      part: ['snippet'],
+      playlistId: uploadsPlaylistId,
+      maxResults: 50,
+    });
+    
+    if (!playlistItemsResponse.data.items || playlistItemsResponse.data.items.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    const videoIds = playlistItemsResponse.data.items
+      .map(item => item.snippet?.resourceId?.videoId)
+      .filter((id): id is string => !!id);
+
+    if (videoIds.length === 0) {
+      return { success: true, data: [] };
+    }
+    
+    // Get contentDetails for all videos at once to check duration
+    const videosResponse = await youtube.videos.list({
+      part: ['contentDetails', 'snippet'],
+      id: videoIds,
+    });
+
+    const shorts: Video[] = videosResponse.data.items
+      ?.filter(video => {
+        const duration = video.contentDetails?.duration;
+        if (!duration) return false;
+        const durationInSeconds = parseISO8601Duration(duration);
+        return durationInSeconds > 0 && durationInSeconds <= 61; // A little buffer for 60s videos
+      })
+      .map(video => {
+        const snippet = video.snippet!;
+        const videoId = video.id!;
+        return {
+          id: videoId,
+          title: snippet.title || 'No Title',
+          description: snippet.description || 'No Description',
+          thumbnailUrl: snippet.thumbnails?.high?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+          youtubeUrl: `https://www.youtube.com/watch?v=${videoId}`,
+          tags: [],
+          videoUrl: '#',
+        };
+      }) || [];
+
+    return { success: true, data: shorts };
+
+  } catch (error: any) {
+    console.error('Error fetching channel shorts:', error);
     let errorMessage = 'An unknown error occurred.';
     if (error.message) {
       if (error.message.includes('noLinkedYouTubeAccount')) {
