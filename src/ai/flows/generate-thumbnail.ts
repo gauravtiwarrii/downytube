@@ -13,12 +13,14 @@ import {z} from 'genkit';
 const GenerateThumbnailInputSchema = z.object({
   title: z.string().describe('The title of the YouTube video.'),
   description: z.string().describe('The description of the YouTube video.'),
-  existingThumbnailUrl: z.string().describe('The URL or data URI of the existing thumbnail to base the new one on.')
+  existingThumbnailUrl: z.string().describe('The URL or data URI of the existing thumbnail to base the new one on.'),
+  customPrompt: z.string().optional().describe('A custom prompt from the user to guide the AI creative director.')
 });
 export type GenerateThumbnailInput = z.infer<typeof GenerateThumbnailInputSchema>;
 
 const GenerateThumbnailOutputSchema = z.object({
   thumbnailDataUri: z.string().describe("The generated thumbnail image as a data URI."),
+  revisedPrompt: z.string().describe("The AI's revised, more detailed prompt that was used for generation.")
 });
 export type GenerateThumbnailOutput = z.infer<typeof GenerateThumbnailOutputSchema>;
 
@@ -26,21 +28,34 @@ export async function generateThumbnail(input: GenerateThumbnailInput): Promise<
   return generateThumbnailFlow(input);
 }
 
-async function imageUrlToDataUri(url: string): Promise<string> {
-    try {
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch image: ${response.statusText}`);
-        }
-        const blob = await response.arrayBuffer();
-        const contentType = response.headers.get('content-type') || 'image/jpeg';
-        const base64 = Buffer.from(blob).toString('base64');
-        return `data:${contentType};base64,${base64}`;
-    } catch (error) {
-        console.error("Error converting image URL to data URI:", error);
-        throw new Error("Could not process the existing thumbnail image.");
-    }
-}
+const CreativeDirectorPromptSchema = z.object({
+    finalPrompt: z.string().describe("A detailed, vibrant, and descriptive prompt for an image generation model that captures the essence of the request. This prompt should be a single paragraph and optimized for creating a visually stunning, clickable thumbnail."),
+});
+
+const creativeDirectorPrompt = ai.definePrompt({
+    name: 'thumbnailCreativeDirector',
+    model: 'googleai/gemini-1.5-pro',
+    input: { schema: GenerateThumbnailInputSchema },
+    output: { schema: CreativeDirectorPromptSchema },
+    prompt: `You are an expert Creative Director for YouTube thumbnails. Your task is to take a video's details and an optional user idea, and then write a single, perfect, highly-detailed prompt for an image generation AI.
+
+**CRITICAL INSTRUCTIONS:**
+1.  **Analyze the Input:** Review the video title, description, and the user's custom prompt.
+2.  **Synthesize a Vision:** Combine the elements into a single, cohesive, and visually compelling concept. If the user prompt is specific, build upon it. If it's vague, use the title and description to invent a powerful concept.
+3.  **Think Virally:** Your generated prompt must be designed to create a thumbnail that is:
+    *   **Emotionally Charged:** High-contrast emotions (shock, joy, curiosity).
+    *   **Visually Striking:** Hyper-realistic, cinematic lighting, vibrant colors, and a clear focal point.
+    *   **Story-Driven:** Tells a simple story or asks a question visually.
+4.  **Write the Final Prompt:** The final output 'finalPrompt' must be a single paragraph. It should be descriptive, using dynamic verbs and rich adjectives. Describe the scene, the subject, the lighting, the colors, and the overall mood.
+5.  **No Text:** Explicitly instruct the image model NOT to include any text, letters, or words in the final image.
+
+**Video Title:** "{{title}}"
+**Video Description:** "{{description}}"
+{{#if customPrompt}}**User's Idea:** "{{customPrompt}}"{{/if}}
+
+Based on all this information, write the perfect image generation prompt.`,
+});
+
 
 const generateThumbnailFlow = ai.defineFlow(
   {
@@ -49,69 +64,25 @@ const generateThumbnailFlow = ai.defineFlow(
     outputSchema: GenerateThumbnailOutputSchema,
   },
   async (input) => {
-    let prompt: any;
+    // Step 1: Use the Creative Director to generate the perfect image prompt
+    const directorResponse = await creativeDirectorPrompt(input);
+    const imagePrompt = directorResponse.output?.finalPrompt;
 
-    // If the thumbnail is a placeholder or already a data URI from our app, generate a new one from scratch.
-    if (input.existingThumbnailUrl.startsWith('data:') || input.existingThumbnailUrl.includes('placehold.co')) {
-        prompt = `You are a viral marketing expert who creates thumbnails that get millions of clicks on YouTube. Your task is to create a thumbnail for a video with the title and description below, following proven viral strategies.
-
-**Key principles for a viral thumbnail:**
-*   **Extreme Visual Impact:** Use hyper-saturated, vibrant colors and extreme contrast. The image must be impossible to ignore.
-*   **Dynamic & Action-Packed:** The scene should feel like it's in motion. Use dynamic angles, action poses, and a sense of energy.
-*   **One Clear Story:** The thumbnail must tell a simple, powerful story or ask a question. Have a single, unmissable focal point. Avoid clutter at all costs.
-*   **Intense Emotion:** If a person is the subject, their face must show an exaggerated, high-stakes emotion (e.g., shock, joy, fear, curiosity). This is critical for engagement.
-*   **Absolutely No Text:** Do not include any text, logos, or watermarks. The visual must do all the work.
-
-**Video Details:**
-*   **Title:** "${input.title}"
-*   **Description:** "${input.description}"
-
-Create a high-resolution, 16:9 aspect ratio image that embodies these viral principles. Make it look like a top creator's thumbnail.`;
-    } else {
-        // If it's a real URL, fetch it and use it as context to improve upon.
-        const existingThumbnailDataUri = await imageUrlToDataUri(input.existingThumbnailUrl);
-        prompt = [
-            {media: {url: existingThumbnailDataUri}},
-            {text: `You are a viral marketing expert specializing in YouTube thumbnails. Your task is to take the provided image and transform it into an incredibly click-worthy thumbnail that will maximize views. While you should use the original image as a base, you must make it dramatically more eye-catching.
-
-**Your transformation should focus on:**
-*   **Dramatize, Don't Replace:** Use the core subject from the original image, but re-imagine the scene to be more dynamic and visually exciting. Change the background if needed to create a more compelling story.
-*   **Extreme Contrast and Saturation:** Make the colors pop. Use vibrant, almost unnatural colors to grab attention in a crowded feed. Boost the contrast significantly.
-*   **Dynamic Lighting:** Add dramatic lighting effects, like lens flares, glows, or cinematic rim lighting, to make the subject stand out.
-*   **Exaggerated Emotion:** If there is a person, subtly amplify their emotional expression to be more intense (e.g., more surprise, more shock, more excitement).
-*   **Focus and Clarity:** Ensure the main subject is tack-sharp and pops from the background, which can be slightly blurred.
-*   **Absolutely No Text:** Do not add any text, logos, or watermarks to the image itself.
-
-**Video Details (for context only):**
-*   **Title:** "${input.title}"
-*   **Description:** "${input.description}"
-
-Generate a new, high-resolution image that is a viral, attention-grabbing version of the original, following all the principles above.`},
-        ];
+    if (!imagePrompt) {
+        throw new Error('The AI creative director failed to generate a prompt.');
     }
 
+    // Step 2: Generate the image using the director's prompt
     const {media} = await ai.generate({
       model: 'googleai/gemini-2.0-flash-preview-image-generation',
-      prompt: prompt,
+      prompt: imagePrompt,
       config: {
         responseModalities: ['TEXT', 'IMAGE'],
         safetySettings: [
-          {
-            category: 'HARM_CATEGORY_HATE_SPEECH',
-            threshold: 'BLOCK_NONE',
-          },
-          {
-            category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
-            threshold: 'BLOCK_NONE',
-          },
-          {
-            category: 'HARM_CATEGORY_HARASSMENT',
-            threshold: 'BLOCK_NONE',
-          },
-          {
-            category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
-            threshold: 'BLOCK_NONE',
-          },
+          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
         ],
       },
     });
@@ -120,6 +91,9 @@ Generate a new, high-resolution image that is a viral, attention-grabbing versio
       throw new Error('Image generation failed to return a data URI.');
     }
     
-    return { thumbnailDataUri: media.url };
+    return { 
+        thumbnailDataUri: media.url,
+        revisedPrompt: imagePrompt,
+    };
   }
 );

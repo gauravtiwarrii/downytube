@@ -18,7 +18,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Loader2, Sparkles, Info, Download, Pencil, Copy, Image as ImageIcon, Upload, ExternalLink, LogIn, Text } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Loader2, Sparkles, Info, Download, Pencil, Copy, Image as ImageIcon, Upload, ExternalLink, LogIn } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getOptimizedTags, getDownloadUrl, getRewrittenDetails, getGeneratedThumbnail, uploadToYouTube, checkAuthStatus } from '@/app/actions';
 import type { Video } from '@/types';
@@ -37,6 +38,7 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
   const [open, setOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [watermark, setWatermark] = useState(video.watermarkText || '');
+  const [thumbnailPrompt, setThumbnailPrompt] = useState(video.thumbnailPrompt || '');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -131,12 +133,14 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
       title: video.rewrittenTitle || video.title,
       description: video.rewrittenDescription || video.description,
       existingThumbnailUrl: video.thumbnailUrl,
+      customPrompt: thumbnailPrompt,
     });
     setIsGeneratingThumbnail(false);
 
     if (result.success && result.data) {
       onUpdateVideo(video.id, {
         thumbnailUrl: result.data.thumbnailDataUri,
+        thumbnailPrompt: result.data.revisedPrompt,
       });
       toast({
         title: 'Thumbnail Generated',
@@ -333,35 +337,46 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
           </Accordion>
 
           <div className="rounded-lg border bg-card/50 p-4 space-y-4">
-            <div className="flex justify-between items-start flex-wrap gap-4">
-              <div>
-                <h4 className="font-semibold text-foreground">Thumbnail</h4>
+            <div>
+                <h4 className="font-semibold text-foreground">AI Thumbnail Generator</h4>
                 <p className="text-sm text-muted-foreground">
-                  Generate a new thumbnail or download the current one.
+                    Describe your ideal thumbnail and let the AI create it.
                 </p>
-              </div>
-              <div className="flex gap-2 flex-shrink-0">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleDownloadThumbnail}
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  Download
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleGenerateThumbnail}
-                  disabled={isAiBusy}
-                >
-                  {isGeneratingThumbnail ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <ImageIcon className="mr-2 h-4 w-4" />
-                  )}
-                  Regenerate
-                </Button>
-              </div>
+            </div>
+            <Textarea
+              placeholder="e.g., A dramatic shot of a programmer, code on the screen reflecting in their glasses, with a cinematic, blue-toned lighting."
+              value={thumbnailPrompt}
+              onChange={(e) => setThumbnailPrompt(e.target.value)}
+              className="text-sm"
+              rows={3}
+            />
+            {video.thumbnailPrompt && (
+                <div className="text-xs text-muted-foreground bg-background/50 p-3 rounded-md border">
+                    <p className="font-semibold mb-1">Last prompt used by AI:</p>
+                    <p className="italic">"{video.thumbnailPrompt}"</p>
+                </div>
+            )}
+            <div className="flex gap-2">
+              <Button
+                className="w-full"
+                onClick={handleGenerateThumbnail}
+                disabled={isAiBusy}
+              >
+                {isGeneratingThumbnail ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <ImageIcon className="mr-2 h-4 w-4" />
+                )}
+                Generate Thumbnail
+              </Button>
+               <Button
+                size="sm"
+                variant="outline"
+                onClick={handleDownloadThumbnail}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Download
+              </Button>
             </div>
           </div>
 

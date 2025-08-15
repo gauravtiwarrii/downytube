@@ -11,6 +11,7 @@ export interface Video {
   rewrittenTitle?: string;
   rewrittenDescription?: string;
   watermarkText?: string;
+  thumbnailPrompt?: string;
 }
 
 export type TranscriptItem = {
