@@ -5,6 +5,8 @@ import { rewriteVideoDetails, RewriteVideoDetailsInput } from '@/ai/flows/rewrit
 import { generateThumbnail, GenerateThumbnailInput } from '@/ai/flows/generate-thumbnail';
 import { findViralClips, FindViralClipsInput } from '@/ai/flows/find-viral-clips';
 import { generateTranscript } from '@/ai/flows/generate-transcript';
+import { generateSocialPost, GenerateSocialPostInput } from '@/ai/flows/generate-social-post';
+import { generateViralIdeas, GenerateViralIdeasInput } from '@/ai/flows/generate-viral-ideas';
 import { getYouTubeClient, checkAuthStatus as checkAuthStatusFromLib, getGoogleUserInfo } from '@/lib/youtube-auth';
 import { formatTime, extractVideoId, parseISO8601Duration } from '@/lib/utils';
 import ytdl from '@distube/ytdl-core';
@@ -65,6 +67,29 @@ export async function getGeneratedThumbnail(data: GenerateThumbnailInput) {
     return { success: false, error: errorMessage };
   }
 }
+
+export async function getSocialPost(data: GenerateSocialPostInput) {
+  try {
+    const result = await generateSocialPost(data);
+    return { success: true, data: result };
+  } catch (error) {
+    console.error('Error generating social post:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+    return { success: false, error: errorMessage };
+  }
+}
+
+export async function getViralIdeas(data: GenerateViralIdeasInput) {
+  try {
+    const result = await generateViralIdeas(data);
+    return { success: true, data: result };
+  } catch (error) {
+    console.error('Error generating viral ideas:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+    return { success: false, error: errorMessage };
+  }
+}
+
 
 export async function getVideoMetadata(url: string) {
   try {
@@ -264,7 +289,7 @@ const timeStringToSeconds = (time: string): number => {
     return NaN;
 };
 
-export async function analyzeVideoForClips(url: string) {
+export async function analyzeVideoForClips(url: string, customInstructions?: string) {
   let video: Video;
   const metadataResult = await getVideoMetadata(url);
   if (!metadataResult.success || !metadataResult.data) {
@@ -290,6 +315,7 @@ export async function analyzeVideoForClips(url: string) {
     const suggestionsResult = await findClipsFromTranscript({
       videoTitle: video.title,
       transcript: transcript.map((t) => ({ ...t, offset: t.offset, duration: t.duration })),
+      customInstructions,
     });
 
     return {
@@ -321,13 +347,17 @@ export async function analyzeVideoForClips(url: string) {
 }
 
 export async function findClipsFromTranscript(input: FindViralClipsInput) {
-    const suggestionsResult = await findViralClips(input);
-
-    if (!suggestionsResult || !suggestionsResult.clips) {
-      throw new Error('The AI could not find any clip suggestions from the provided transcript.');
+    try {
+      const suggestionsResult = await findViralClips(input);
+      if (!suggestionsResult || !suggestionsResult.clips) {
+        throw new Error('The AI could not find any clip suggestions from the provided transcript.');
+      }
+      return suggestionsResult;
+    } catch (error) {
+        console.error('Error in findClipsFromTranscript:', error);
+        const errorMessage = error instanceof Error ? error.message : 'An unknown AI error occurred.';
+        throw new Error(errorMessage);
     }
-
-    return suggestionsResult;
 }
 
 export async function getGeneratedTranscript(youtubeUrl: string) {
@@ -648,3 +678,5 @@ export async function getChannelShorts(channelUrl: string) {
     return { success: false, error: errorMessage };
   }
 }
+
+    

@@ -19,10 +19,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Sparkles, Info, Download, Pencil, Copy, Image as ImageIcon, Upload, ExternalLink, LogIn } from 'lucide-react';
+import { Loader2, Sparkles, Info, Download, Pencil, Copy, Image as ImageIcon, Upload, ExternalLink, LogIn, MessageSquareQuote } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getOptimizedTags, getDownloadUrl, getRewrittenDetails, getGeneratedThumbnail, uploadToYouTube, checkAuthStatus } from '@/app/actions';
+import { getOptimizedTags, getDownloadUrl, getRewrittenDetails, getGeneratedThumbnail, uploadToYouTube, checkAuthStatus, getSocialPost } from '@/app/actions';
 import type { Video } from '@/types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
 type VideoDetailsModalProps = {
   video: Video;
@@ -35,10 +36,14 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
   const [isDownloading, setIsDownloading] = useState(false);
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isGeneratingPost, setIsGeneratingPost] = useState(false);
   const [open, setOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [watermark, setWatermark] = useState(video.watermarkText || '');
   const [thumbnailPrompt, setThumbnailPrompt] = useState(video.thumbnailPrompt || '');
+  const [socialPlatform, setSocialPlatform] = useState<'Twitter' | 'LinkedIn'>('Twitter');
+  const [generatedPost, setGeneratedPost] = useState('');
+
   const { toast } = useToast();
 
   useEffect(() => {
@@ -155,6 +160,31 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
     }
   };
 
+  const handleGenerateSocialPost = async () => {
+    setIsGeneratingPost(true);
+    setGeneratedPost('');
+    const result = await getSocialPost({
+        title: video.rewrittenTitle || video.title,
+        description: video.rewrittenDescription || video.description,
+        platform: socialPlatform,
+    });
+    setIsGeneratingPost(false);
+
+    if (result.success && result.data) {
+        setGeneratedPost(result.data.postText);
+        toast({
+            title: 'Post Generated!',
+            description: `A new post for ${socialPlatform} has been created.`,
+        });
+    } else {
+        toast({
+            variant: 'destructive',
+            title: 'Post Generation Failed',
+            description: result.error || 'An unknown error occurred.',
+        });
+    }
+  }
+
   const handleDownloadVideo = async () => {
     setIsDownloading(true);
     const result = await getDownloadUrl(video.youtubeUrl);
@@ -260,7 +290,7 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
 
   const currentTitle = video.rewrittenTitle || video.title;
   const currentDescription = video.rewrittenDescription || video.description;
-  const isAiBusy = isRewriting || isOptimizing || isGeneratingThumbnail || isUploading;
+  const isAiBusy = isRewriting || isOptimizing || isGeneratingThumbnail || isUploading || isGeneratingPost;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -457,6 +487,43 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
               </div>
             )}
           </div>
+
+          <div className="rounded-lg border bg-card/50 p-4 space-y-4">
+            <div>
+              <h4 className="font-semibold text-foreground">AI Social Post Generator</h4>
+              <p className="text-sm text-muted-foreground">
+                Generate a promotional post for social media.
+              </p>
+            </div>
+            <div className="flex gap-2">
+                <Select value={socialPlatform} onValueChange={(value) => setSocialPlatform(value as 'Twitter' | 'LinkedIn')}>
+                    <SelectTrigger className="w-[150px]">
+                        <SelectValue placeholder="Select Platform" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="Twitter">X / Twitter</SelectItem>
+                        <SelectItem value="LinkedIn">LinkedIn</SelectItem>
+                    </SelectContent>
+                </Select>
+                <Button className="w-full" onClick={handleGenerateSocialPost} disabled={isAiBusy}>
+                    {isGeneratingPost ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquareQuote className="mr-2 h-4 w-4" />}
+                    Generate Post
+                </Button>
+            </div>
+            {generatedPost && (
+                <div className="relative">
+                    <Textarea value={generatedPost} readOnly rows={5} className="bg-background/50" />
+                     <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute top-2 right-2"
+                      onClick={() => handleCopy(generatedPost, 'The social post has been copied.')}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                </div>
+            )}
+          </div>
           
           <div className="rounded-lg border bg-card/50 p-4 space-y-4">
             <div className="flex justify-between items-start flex-wrap gap-4">
@@ -549,3 +616,5 @@ const VideoDetailsModal = ({ video, onUpdateVideo }: VideoDetailsModalProps) => 
 };
 
 export default VideoDetailsModal;
+
+    

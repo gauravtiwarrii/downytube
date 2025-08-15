@@ -7,12 +7,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { analyzeVideoForClips, getGeneratedTranscript, findClipsFromTranscript } from '@/app/actions';
-import { Loader2, Scissors, Wand2, Star, FileText } from 'lucide-react';
+import { Loader2, Scissors, Wand2, Star, FileText, Lightbulb } from 'lucide-react';
 import type { Video, TranscriptItem } from '@/types';
 import Image from 'next/image';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { formatTime } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
 
 
 type ClipSuggestion = {
@@ -30,8 +31,10 @@ type AnalysisState = 'idle' | 'loading' | 'success' | 'error' | 'needsGeneration
 
 export default function ClippingPage() {
     const [analysisState, setAnalysisState] = useState<AnalysisState>('idle');
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
     const [url, setUrl] = useState('');
+    const [customInstructions, setCustomInstructions] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [videoInfo, setVideoInfo] = useState<Video | null>(null);
     const [suggestions, setSuggestions] = useState<ClipSuggestion[]>([]);
@@ -53,8 +56,10 @@ export default function ClippingPage() {
         setSelectedClip(null);
         setShowManualForm(false);
         setUploadedClipUrl(null);
+        setIsAnalyzing(true);
 
-        const result = await analyzeVideoForClips(url);
+        const result = await analyzeVideoForClips(url, customInstructions || undefined);
+        setIsAnalyzing(false);
 
         if (result.success && result.data) {
             setVideoInfo(result.data.video);
@@ -73,6 +78,37 @@ export default function ClippingPage() {
             toast({ variant: 'destructive', title: 'Analysis Failed', description: result.error });
         }
     };
+    
+    const findClipsAgain = async () => {
+        if (!videoInfo || transcript.length === 0) return;
+        setIsAnalyzing(true);
+        toast({ title: 'Re-analyzing with new instructions...'});
+        
+        try {
+            const clipsResult = await findClipsFromTranscript({
+                videoTitle: videoInfo.title,
+                transcript: transcript,
+                customInstructions: customInstructions || undefined,
+            });
+
+            const newSuggestions = clipsResult.clips.map((clip) => ({
+                ...clip,
+                startTimeString: formatTime(clip.startTime),
+                endTimeString: formatTime(clip.endTime),
+            }));
+
+            setSuggestions(newSuggestions);
+            setAnalysisState('success');
+            toast({ title: 'Analysis Complete!', description: 'AI has found new clips based on your instructions.' });
+        } catch (e) {
+            const clipError = e instanceof Error ? e.message : 'Unknown error finding clips.';
+            setError(clipError);
+            toast({ variant: 'destructive', title: 'Clip Analysis Failed', description: clipError });
+        } finally {
+            setIsAnalyzing(false);
+        }
+    }
+
 
     const handleGenerateTranscript = async () => {
         if (!videoInfo) return;
@@ -101,6 +137,7 @@ export default function ClippingPage() {
             const clipsResult = await findClipsFromTranscript({
                 videoTitle: videoInfo.title,
                 transcript: newTranscript,
+                customInstructions: customInstructions || undefined
             });
 
             const newSuggestions = clipsResult.clips.map((clip) => ({
@@ -137,6 +174,7 @@ export default function ClippingPage() {
         setShowManualForm(false);
         setUploadedClipUrl(null);
         setTranscriptQuery('');
+        setCustomInstructions('');
     }
     
     const onUploadSuccess = (finalUrl: string) => {
@@ -314,8 +352,24 @@ export default function ClippingPage() {
                             />
                         ) : (
                             <div>
-                                <h3 className="text-2xl font-bold tracking-tight text-center mb-2">AI Clip Suggestions</h3>
-                                <p className="text-muted-foreground text-center mb-6">Here are the best moments found by our AI. Pick one to get started.</p>
+                                <div className="text-center">
+                                  <h3 className="text-2xl font-bold tracking-tight mb-2">AI Clip Suggestions</h3>
+                                  <p className="text-muted-foreground mb-6">Here are the best moments found by our AI. Pick one to get started.</p>
+                                </div>
+                                <Card className="mb-6 p-4">
+                                   <label htmlFor="custom-instructions" className="text-sm font-medium text-muted-foreground">Give the AI specific instructions (optional)</label>
+                                   <Textarea
+                                        id="custom-instructions"
+                                        placeholder="e.g., Find a moment where the guest talks about their first job"
+                                        value={customInstructions}
+                                        onChange={(e) => setCustomInstructions(e.target.value)}
+                                        className="mt-2"
+                                   />
+                                   <Button onClick={findClipsAgain} disabled={isAnalyzing} className="mt-2 w-full sm:w-auto">
+                                       {isAnalyzing ? <Loader2 className="animate-spin" /> : <Wand2 />}
+                                       Re-analyze
+                                   </Button>
+                                </Card>
                                 
                                 {suggestions.length > 0 ? (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -349,7 +403,7 @@ export default function ClippingPage() {
                                      <Card className="text-center p-8">
                                         <h3 className="text-lg font-semibold">AI Could Not Find Suggestions</h3>
                                         <p className="mt-1 text-sm text-muted-foreground max-w-md mx-auto">
-                                            The AI analyzed the transcript but couldn't find any clear clip suggestions. You can use the searchable transcript above to find your own moments.
+                                            The AI analyzed the transcript but couldn't find any clear clip suggestions. You can try giving it different instructions or create a clip manually.
                                         </p>
                                     </Card>
                                 )}
@@ -381,17 +435,28 @@ export default function ClippingPage() {
                             <CardDescription>Paste a YouTube URL to find the best moments for viral clips.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="flex flex-col sm:flex-row gap-2">
+                            <div className="space-y-4">
                                 <Input
                                     placeholder="https://www.youtube.com/watch?v=..."
                                     value={url}
                                     onChange={(e) => setUrl(e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
-                                    disabled={analysisState === 'loading'}
+                                    disabled={isAnalyzing}
                                     className="text-base"
                                 />
-                                <Button onClick={handleAnalyze} disabled={!url || analysisState === 'loading'} className="w-full sm:w-auto">
-                                    {analysisState === 'loading' ? <Loader2 className="animate-spin" /> : <Wand2 />}
+                                <div>
+                                   <label htmlFor="custom-instructions-initial" className="text-sm font-medium text-muted-foreground">Give the AI specific instructions (optional)</label>
+                                   <Textarea
+                                        id="custom-instructions-initial"
+                                        placeholder="e.g., Find a moment where the guest gets emotional"
+                                        value={customInstructions}
+                                        onChange={(e) => setCustomInstructions(e.target.value)}
+                                        className="mt-2"
+                                        disabled={isAnalyzing}
+                                   />
+                                </div>
+                                <Button onClick={handleAnalyze} disabled={!url || isAnalyzing} className="w-full">
+                                    {isAnalyzing ? <Loader2 className="animate-spin" /> : <Wand2 />}
                                     Analyze Video
                                 </Button>
                             </div>
@@ -416,3 +481,5 @@ export default function ClippingPage() {
         </div>
     );
 }
+
+    

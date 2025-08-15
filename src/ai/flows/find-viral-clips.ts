@@ -26,6 +26,7 @@ const FindViralClipsInputSchema = z.object({
     offset: z.number(), // in milliseconds
     duration: z.number(), // in milliseconds
   })),
+  customInstructions: z.string().optional().describe('Specific instructions from the user on what kind of clips to look for.'),
 });
 export type FindViralClipsInput = z.infer<typeof FindViralClipsInputSchema>;
 
@@ -43,6 +44,7 @@ const prompt = ai.definePrompt({
   name: 'findViralClipsPrompt',
   input: {schema: FindViralClipsInputSchema},
   output: {schema: FindViralClipsOutputSchema},
+  model: 'googleai/gemini-1.5-flash',
   prompt: `You are an expert viral video producer for YouTube Shorts, Instagram Reels, and TikTok. Your job is to analyze a podcast transcript and identify the most viral-worthy segments between 15 and 60 seconds long.
 
 **Video Title:** {{{videoTitle}}}
@@ -55,6 +57,11 @@ Look for segments that have high potential for engagement. Focus on:
 - **Humor:** Jokes, funny stories, or witty banter that is genuinely entertaining.
 - **Narrative Hooks:** The start of a compelling story or a question that makes the viewer need to know what happens next.
 
+{{#if customInstructions}}
+**CRITICAL USER INSTRUCTION: The user has provided a specific request. Prioritize finding clips that match this description:**
+"{{customInstructions}}"
+{{/if}}
+
 **Input Transcript Format:**
 The transcript is provided as a JSON array. Each object has 'text' and 'offset' (in milliseconds). Use the offset to calculate the startTime and endTime in SECONDS for each clip.
 
@@ -64,7 +71,7 @@ The transcript is provided as a JSON array. Each object has 'text' and 'offset' 
 3.  For each segment, provide the start and end times in **total seconds**.
 4.  Generate a short, extremely catchy, viral-style title for the clip. Think like a top creator (e.g., "He DESTROYED the argument in 5 seconds...").
 5.  Provide a virality score from 1-10.
-6.  Briefly explain your reasoning for why the clip is viral-worthy.
+6.  Briefly explain your reasoning for why the clip is viral-worthy. If the user provided custom instructions, explain how the clip fulfills their request.
 7.  Do not select overlapping clips.
 
 **Transcript:**
@@ -72,6 +79,14 @@ The transcript is provided as a JSON array. Each object has 'text' and 'offset' 
 {{{json transcript}}}
 \`\`\`
 `,
+config: {
+    safetySettings: [
+      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+    ],
+  },
 });
 
 const findViralClipsFlow = ai.defineFlow(
@@ -107,7 +122,15 @@ const findViralClipsFlow = ai.defineFlow(
     const {output} = await prompt({
         videoTitle: input.videoTitle,
         transcript: truncatedTranscript,
+        customInstructions: input.customInstructions,
     });
-    return output!;
+    
+    if (!output || !output.clips) {
+        throw new Error("AI failed to find clips. This can happen if the transcript is too short or doesn't contain clear conversational segments. Try a different video.");
+    }
+    
+    return output;
   }
 );
+
+    

@@ -1,4 +1,4 @@
-import { Youtube, Scissors, Copy, Repeat } from 'lucide-react';
+import { Youtube, Scissors, Copy, Repeat, Lightbulb } from 'lucide-react';
 import Link from 'next/link';
 import UserNav from '@/components/features/UserNav';
 
@@ -17,6 +17,10 @@ const Header = () => {
             <nav className="hidden md:flex items-center space-x-4">
                <Link href="/" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
                 Dashboard
+              </Link>
+              <Link href="/viral-ideas" className="flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
+                <Lightbulb className="h-4 w-4" />
+                <span>Viral Ideas</span>
               </Link>
               <Link href="/clipping" className="flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
                 <Scissors className="h-4 w-4" />
@@ -40,3 +44,5 @@ const Header = () => {
 };
 
 export default Header;
+
+    
